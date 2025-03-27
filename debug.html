@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Contacts Viewer - Debug</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .debug-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .debug-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .status-ok {
+            color: #4caf50;
+        }
+        .status-error {
+            color: #f44336;
+        }
+        .code-block {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Google Contacts Viewer - Debug</h1>
+            <p>This page helps diagnose configuration issues</p>
+        </header>
+
+        <div class="card">
+            <h2>Configuration Diagnostics</h2>
+            
+            <div class="debug-section">
+                <div class="debug-title">Environment Variables</div>
+                <div id="env-vars-status"></div>
+            </div>
+            
+            <div class="debug-section">
+                <div class="debug-title">Google API Libraries</div>
+                <div id="api-libs-status"></div>
+            </div>
+            
+            <div class="debug-section">
+                <div class="debug-title">Current Configuration</div>
+                <div id="config-display"></div>
+            </div>
+            
+            <div class="debug-section">
+                <div class="debug-title">Troubleshooting</div>
+                <ol>
+                    <li>Check your Netlify environment variables: <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_API_KEY</code> should be set correctly</li>
+                    <li>Ensure your Google Cloud project has the People API enabled</li>
+                    <li>Verify your OAuth consent screen is configured</li>
+                    <li>Check that your Netlify domain is added to the authorized JavaScript origins in your Google Cloud OAuth client settings</li>
+                    <li>Make sure the build script ran successfully</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Back to Application</h2>
+            <a href="index.html" class="button">Go to Main App</a>
+        </div>
+    </div>
+
+    <!-- Load the Google API client and Identity Services library -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    <script src="js/config.js"></script>
+    
+    <script>
+        // Debug logic
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check environment variables (via config)
+            const envVarsStatus = document.getElementById('env-vars-status');
+            const configDisplay = document.getElementById('config-display');
+            const apiLibsStatus = document.getElementById('api-libs-status');
+            
+            // Check if CONFIG exists
+            if (typeof CONFIG !== 'undefined') {
+                // Check if environment variables were properly injected
+                const clientIdOk = CONFIG.CLIENT_ID && CONFIG.CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID';
+                const apiKeyOk = CONFIG.API_KEY && CONFIG.API_KEY !== 'YOUR_GOOGLE_API_KEY';
+                
+                let statusHtml = '';
+                statusHtml += `<p>CLIENT_ID: <span class="${clientIdOk ? 'status-ok' : 'status-error'}">${clientIdOk ? 'Configured' : 'Missing or default'}</span></p>`;
+                statusHtml += `<p>API_KEY: <span class="${apiKeyOk ? 'status-ok' : 'status-error'}">${apiKeyOk ? 'Configured' : 'Missing or default'}</span></p>`;
+                
+                envVarsStatus.innerHTML = statusHtml;
+                
+                // Display current config (masked for security)
+                let configHtml = '<div class="code-block">';
+                configHtml += `CLIENT_ID: ${clientIdOk ? '✓ Set (starts with ' + CONFIG.CLIENT_ID.substring(0, 5) + '...)' : '✗ Not set properly'}\n`;
+                configHtml += `API_KEY: ${apiKeyOk ? '✓ Set (starts with ' + CONFIG.API_KEY.substring(0, 5) + '...)' : '✗ Not set properly'}\n`;
+                configHtml += `SCOPES: ${CONFIG.SCOPES}\n`;
+                configHtml += `DISCOVERY_DOC: ${CONFIG.DISCOVERY_DOC}`;
+                configHtml += '</div>';
+                
+                configDisplay.innerHTML = configHtml;
+            } else {
+                envVarsStatus.innerHTML = '<p class="status-error">CONFIG object not found. Check if config.js is loaded correctly.</p>';
+                configDisplay.innerHTML = '<p class="status-error">Cannot display configuration - CONFIG not available</p>';
+            }
+            
+            // Check if Google API libraries are loaded
+            let apiLibsHtml = '';
+            const gapiLoaded = typeof gapi !== 'undefined';
+            const gisLoaded = typeof google !== 'undefined' && 
+                            typeof google.accounts !== 'undefined' && 
+                            typeof google.accounts.oauth2 !== 'undefined';
+            
+            apiLibsHtml += `<p>Google API (gapi): <span class="${gapiLoaded ? 'status-ok' : 'status-error'}">${gapiLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
+            apiLibsHtml += `<p>Google Identity Services: <span class="${gisLoaded ? 'status-ok' : 'status-error'}">${gisLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
+            
+            apiLibsStatus.innerHTML = apiLibsHtml;
+        });
+    </script>
+</body>
+</html>

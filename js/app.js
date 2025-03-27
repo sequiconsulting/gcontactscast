@@ -21,14 +21,20 @@ const GoogleContactsApp = {
         contactsContainer: document.getElementById('contacts-container'),
         userName: document.getElementById('user-name'),
         loader: document.getElementById('loader'),
-        searchInput: document.getElementById('search-input')
+        searchInput: document.getElementById('search-input'),
+        debugInfo: document.getElementById('debug-info') // New element for debugging
     },
 
     // Initialize the application
     init: function() {
+        console.log('Initializing Google Contacts App');
+        console.log('Using CLIENT_ID:', CONFIG.CLIENT_ID);
+        console.log('Using API_KEY:', CONFIG.API_KEY);
+        
         this.setupEventListeners();
         this.loadGapiClient();
         this.loadGisClient();
+        this.showDebugInfo();
     },
 
     // Set up event listeners
@@ -40,38 +46,79 @@ const GoogleContactsApp = {
 
     // Load the Google API client
     loadGapiClient: function() {
+        console.log('Loading GAPI client...');
         gapi.load('client', this.initializeGapiClient.bind(this));
     },
 
     // Initialize the Google API client
     initializeGapiClient: async function() {
+        console.log('Initializing GAPI client...');
         try {
             await gapi.client.init({
                 apiKey: CONFIG.API_KEY,
                 discoveryDocs: [CONFIG.DISCOVERY_DOC],
             });
             this.state.gapiInited = true;
+            console.log('GAPI client initialized successfully');
             this.maybeEnableButtons();
         } catch (error) {
+            console.error('Failed to initialize Google API client:', error);
             this.showError('Failed to initialize Google API client: ' + error.message);
         }
     },
 
     // Load the Google Identity Services client
     loadGisClient: function() {
-        this.state.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CONFIG.CLIENT_ID,
-            scope: CONFIG.SCOPES,
-            callback: '', // defined later
-        });
-        this.state.gisInited = true;
-        this.maybeEnableButtons();
+        console.log('Loading GIS client...');
+        if (!CONFIG.CLIENT_ID || CONFIG.CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
+            console.error('Invalid CLIENT_ID. Please check your configuration.');
+            this.showError('Invalid CLIENT_ID configuration. Please check the console for details.');
+            return;
+        }
+        
+        try {
+            this.state.tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CONFIG.CLIENT_ID,
+                scope: CONFIG.SCOPES,
+                callback: '', // defined later
+            });
+            this.state.gisInited = true;
+            console.log('GIS client initialized successfully');
+            this.maybeEnableButtons();
+        } catch (error) {
+            console.error('Failed to initialize Google Identity Services client:', error);
+            this.showError('Failed to initialize Google Identity Services: ' + error.message);
+        }
     },
 
     // Enable buttons when both clients are loaded
     maybeEnableButtons: function() {
+        console.log('Checking if button should be enabled - GAPI:', this.state.gapiInited, 'GIS:', this.state.gisInited);
         if (this.state.gapiInited && this.state.gisInited) {
+            console.log('Enabling signin button');
             this.elements.signinButton.disabled = false;
+        }
+    },
+
+    // Show debug information
+    showDebugInfo: function() {
+        // Make sure the debug info element exists
+        if (this.elements.debugInfo) {
+            let debugContent = '';
+            
+            // Check for empty/default credentials
+            if (!CONFIG.CLIENT_ID || CONFIG.CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
+                debugContent += '<p class="error-message">CLIENT_ID is missing or using default value.</p>';
+            }
+            
+            if (!CONFIG.API_KEY || CONFIG.API_KEY === 'YOUR_GOOGLE_API_KEY') {
+                debugContent += '<p class="error-message">API_KEY is missing or using default value.</p>';
+            }
+            
+            if (debugContent) {
+                this.elements.debugInfo.innerHTML = debugContent;
+                this.elements.debugInfo.style.display = 'block';
+            }
         }
     },
 

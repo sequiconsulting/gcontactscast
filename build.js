@@ -8,21 +8,18 @@ function processEnvVariables() {
   console.log('Processing environment variables...');
   
   const configPath = path.join(__dirname, 'js', 'config.js');
-  let configContent = fs.readFileSync(configPath, 'utf8');
   
-  // Replace placeholders with actual environment variables
-  configContent = configContent.replace(
-    /process\.env\.GOOGLE_CLIENT_ID \|\| ['"]YOUR_GOOGLE_CLIENT_ID['"]/, 
-    `'${process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID'}'`
-  );
-  
-  configContent = configContent.replace(
-    /process\.env\.GOOGLE_API_KEY \|\| ['"]YOUR_GOOGLE_API_KEY['"]/, 
-    `'${process.env.GOOGLE_API_KEY || 'YOUR_GOOGLE_API_KEY'}'`
-  );
+  // Create a new CONFIG object with environment variables
+  const newConfig = `// Configuration file for Google Contacts Viewer
+const CONFIG = {
+    CLIENT_ID: '${process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID'}',
+    API_KEY: '${process.env.GOOGLE_API_KEY || 'YOUR_GOOGLE_API_KEY'}',
+    SCOPES: 'https://www.googleapis.com/auth/contacts.readonly',
+    DISCOVERY_DOC: 'https://people.googleapis.com/$discovery/rest?version=v1'
+};`;
   
   // Write the processed file
-  fs.writeFileSync(configPath, configContent);
+  fs.writeFileSync(configPath, newConfig);
   console.log('Environment variables processed successfully.');
 }
 
