@@ -1,28 +1,57 @@
 // Main application script for Google Contacts Viewer
-
 const App = {
     // Application state
     state: {
         gapiInited: false,
         gisInited: false,
         isSignedIn: false,
+        tokenClient: null,
         contacts: [],
         filteredContacts: [],
         userId: null,
-        tokenClient: null,
         isLoading: false,
-        searchTerm: ''
+        isOffline: false
     },
-
+    
+    // Debug mode
+    DEBUG_MODE: false,
+    
+    // Debug logging function
+    debugLog: function(message, obj) {
+        if (!this.DEBUG_MODE) return;
+        
+        const timestamp = new Date().toISOString().substr(11, 8);
+        const formattedMessage = `[DEBUG ${timestamp}] ${message}`;
+        
+        console.log(formattedMessage);
+        
+        if (obj) {
+            console.log(obj);
+        }
+        
+        // Also add to debug info element if available
+        const debugInfo = document.getElementById('debug-info');
+        if (debugInfo) {
+            debugInfo.style.display = 'block';
+            const logLine = document.createElement('p');
+            logLine.textContent = formattedMessage;
+            debugInfo.appendChild(logLine);
+        }
+    },
+    
     // Initialize the application
     init: function() {
         console.log('Initializing application...');
+        this.debugLog('Initializing application...');
         
         // Set up event listeners
         document.getElementById('signin-button').addEventListener('click', this.handleAuthClick.bind(this));
         document.getElementById('signout-button').addEventListener('click', this.handleSignoutClick.bind(this));
         document.getElementById('sync-button').addEventListener('click', this.handleSyncClick.bind(this));
         document.getElementById('search-input').addEventListener('input', this.handleSearch.bind(this));
+        
+        // Hide the initial loader
+        document.getElementById('initial-loader').style.display = 'none';
         
         // Initialize GAPI and GIS
         this.initializeGapiClient();
@@ -32,313 +61,399 @@ const App = {
         window.addEventListener('online', this.updateOnlineStatus.bind(this));
         window.addEventListener('offline', this.updateOnlineStatus.bind(this));
         this.updateOnlineStatus();
-    },
-    
-    // Update online status indicator
-    updateOnlineStatus: function() {
-        if (navigator.onLine) {
-            document.getElementById('error-container').style.display = 'none';
-        } else {
-            document.getElementById('error-container').innerHTML = `
-                <h3>You're offline</h3>
-                <p>This app can still display your cached contacts while you're offline.</p>
-            `;
-            document.getElementById('error-container').style.display = 'block';
+        
+        // Set app version if available
+        if (typeof CONFIG !== 'undefined' && CONFIG.VERSION) {
+            const versionElement = document.getElementById('app-version');
+            if (versionElement) {
+                versionElement.textContent = CONFIG.VERSION;
+            }
         }
     },
     
-    // Enhanced initialization of the GAPI client
-    initializeGapiClient: async function() {
-        console.log('Initializing GAPI client...');
-        try {
-            // Get API_KEY using the getter
-            const apiKey = CONFIG.API_KEY;
-            
-            // Validate API key
-            if (!apiKey || apiKey === 'YOUR_GOOGLE_API_KEY' || apiKey === 'MISSING_CREDENTIAL') {
-                console.error('Invalid API key configuration:', apiKey);
-                this.showError('Invalid API key configuration. Please check your Netlify environment variables.');
-                return;
-            }
-            
-            console.log('Using API key:', apiKey.substring(0, 3) + '...' + apiKey.substring(apiKey.length - 3));
-            
-            await gapi.client.init({
-                apiKey: apiKey,
-                discoveryDocs: [CONFIG.DISCOVERY_DOC],
-            });
-            
-            this.state.gapiInited = true;
-            console.log('GAPI client initialized successfully');
-            this.maybeEnableButtons();
-        } catch (error) {
-            console.error('Failed to initialize Google API client:', error);
-            this.showError('Failed to initialize Google API client: ' + error.message);
-        }
-    },
-
-    // Enhanced loading of the Google Identity Services client
-    loadGisClient: function() {
-        console.log('Loading GIS client...');
+    // Initialize the Google API client library
+    initializeGapiClient: function() {
+        this.debugLog('Initializing GAPI client...');
         
-        // Check CONFIG using getter for CLIENT_ID with more detailed validation
-        try {
-            const clientId = CONFIG.CLIENT_ID;
-            console.log('Client ID available:', clientId.substring(0, 3) + '...' + clientId.substring(clientId.length - 3));
-            
-            if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID' || clientId === 'MISSING_CREDENTIAL') {
-                console.error('Invalid CLIENT_ID configuration:', clientId);
-                this.showError('Invalid CLIENT_ID configuration. Please check your Netlify environment variables.');
-                return;
-            }
-            
-            // Define callback with better error handling
-            const tokenCallback = (resp) => {
-                console.log('Token callback received:', resp.error ? 'Error' : 'Success');
-                
-                if (resp.error !== undefined) {
-                    // Handle specific errors
-                    if (resp.error === 'popup_closed_by_user') {
-                        this.showError('Sign in was cancelled. Please try again.');
-                    } else {
-                        console.error('Authentication error:', resp.error);
-                        this.showError('Authentication error: ' + resp.error);
-                    }
-                    return;
-                }
-                
-                this.onSuccessfulAuth();
-            };
-            
-            // Initialize token client with better error handling
-            try {
-                this.state.tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: clientId,
-                    scope: CONFIG.SCOPES,
-                    callback: tokenCallback,
-                    error_callback: (err) => {
-                        console.error('Token client error:', err);
-                        this.showError('Authentication initialization error: ' + err.type);
-                    }
-                });
-                
-                this.state.gisInited = true;
-                console.log('GIS client initialized successfully');
-                this.maybeEnableButtons();
-            } catch (gisError) {
-                console.error('GIS initialization error:', gisError);
-                this.showError('Failed to initialize authentication: ' + gisError.message);
-            }
-        } catch (error) {
-            console.error('Failed to initialize Google Identity Services client:', error);
-            this.showError('Failed to initialize Google Identity Services: ' + error.message);
-        }
-    },
-
-    // Enhanced function to enable buttons
-    maybeEnableButtons: function() {
-        const signinButton = document.getElementById('signin-button');
-        
-        console.log('Checking initialization status:');
-        console.log('- GAPI initialized:', this.state.gapiInited);
-        console.log('- GIS initialized:', this.state.gisInited);
-        
-        if (this.state.gapiInited && this.state.gisInited) {
-            console.log('Both APIs initialized, enabling sign-in button');
-            
-            if (signinButton) {
-                signinButton.disabled = false;
-                console.log('Sign-in button enabled');
-            } else {
-                console.error('Sign-in button element not found');
-            }
-            
-            // Hide the initial loader
-            const initialLoader = document.getElementById('initial-loader');
-            if (initialLoader) {
-                initialLoader.style.display = 'none';
-                console.log('Initial loader hidden');
-            } else {
-                console.error('Initial loader element not found');
-            }
-        } else {
-            console.log('APIs not fully initialized yet, button remains disabled');
-        }
-    },
-    
-    // Handle the sign-in button click
-    handleAuthClick: function() {
-        console.log('Auth button clicked');
-        
-        if (!this.state.tokenClient) {
-            console.error('Token client not initialized');
-            this.showError('Authentication not ready. Please try again later.');
+        if (typeof gapi === 'undefined') {
+            console.error('GAPI not loaded');
+            this.showError('Google API client not loaded. Please refresh the page and try again.');
             return;
         }
         
-        // Show loading indicator
-        this.setLoading(true);
+        gapi.load('client', async () => {
+            try {
+                // Check that CONFIG is available
+                if (typeof CONFIG === 'undefined') {
+                    this.showError('Configuration not loaded. Please refresh the page.');
+                    return;
+                }
+                
+                // Get API key using the getter, which handles decoding
+                const apiKey = CONFIG.API_KEY;
+                
+                // Check that it's valid
+                if (!apiKey || 
+                    apiKey === 'YOUR_GOOGLE_API_KEY' || 
+                    apiKey === 'MISSING_CREDENTIAL' || 
+                    apiKey === 'INVALID_CREDENTIAL') {
+                    this.showError('Invalid API key configuration. Please check your environment variables.');
+                    return;
+                }
+                
+                await gapi.client.init({
+                    apiKey: apiKey,
+                    discoveryDocs: [CONFIG.DISCOVERY_DOC],
+                });
+                
+                this.state.gapiInited = true;
+                this.debugLog('GAPI client initialized successfully');
+                this.maybeEnableButtons();
+            } catch (error) {
+                console.error('Error initializing GAPI client:', error);
+                this.showError('Failed to initialize Google API client: ' + error.message);
+            }
+        });
+    },
+    
+    // Load the Google Identity Services client
+    loadGisClient: function() {
+        this.debugLog('Loading GIS client...');
         
-        // Prompt the user to select an account and grant consent
+        if (typeof google === 'undefined' || 
+            !google.accounts || 
+            !google.accounts.oauth2) {
+            console.error('Google Identity Services not loaded');
+            this.showError('Google Identity Services not loaded. Please refresh the page and try again.');
+            return;
+        }
+        
         try {
-            this.state.tokenClient.requestAccessToken({
-                prompt: 'consent'
+            // Check that CONFIG is available
+            if (typeof CONFIG === 'undefined') {
+                this.showError('Configuration not loaded. Please refresh the page.');
+                return;
+            }
+            
+            // Get client ID using the getter, which handles decoding
+            const clientId = CONFIG.CLIENT_ID;
+            
+            // Check that it's valid
+            if (!clientId || 
+                clientId === 'YOUR_GOOGLE_CLIENT_ID' || 
+                clientId === 'MISSING_CREDENTIAL' || 
+                clientId === 'INVALID_CREDENTIAL') {
+                this.showError('Invalid client ID configuration. Please check your environment variables.');
+                return;
+            }
+            
+            this.state.tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: CONFIG.SCOPES,
+                callback: (resp) => {
+                    if (resp.error !== undefined) {
+                        console.error('Token error:', resp.error);
+                        if (resp.error === 'popup_closed_by_user') {
+                            this.showError('Sign in was cancelled. Please try again.');
+                        } else {
+                            this.showError('Authentication error: ' + resp.error);
+                        }
+                        return;
+                    }
+                    
+                    this.onSuccessfulAuth();
+                }
             });
-            console.log('Requested access token with consent prompt');
+            
+            this.state.gisInited = true;
+            this.debugLog('GIS client initialized successfully');
+            this.maybeEnableButtons();
         } catch (error) {
-            console.error('Error requesting access token:', error);
-            this.showError('Authentication error: ' + error.message);
-            this.setLoading(false);
+            console.error('Error initializing GIS client:', error);
+            this.showError('Failed to initialize authentication: ' + error.message);
         }
     },
     
-    // Handle successful authentication
+    // Enable sign-in button if both APIs are initialized
+    maybeEnableButtons: function() {
+        const signInButton = document.getElementById('signin-button');
+        
+        if (this.state.gapiInited && this.state.gisInited) {
+            this.debugLog('Both APIs initialized, enabling signin button');
+            signInButton.disabled = false;
+        } else {
+            this.debugLog(`APIs not fully initialized yet (GAPI: ${this.state.gapiInited}, GIS: ${this.state.gisInited})`);
+        }
+    },
+    
+    // Handle sign-in button click
+    handleAuthClick: function() {
+        this.debugLog('Auth button clicked');
+        
+        if (!this.state.tokenClient) {
+            this.showError('Authentication not initialized. Please refresh the page and try again.');
+            return;
+        }
+        
+        // Get a token
+        this.state.tokenClient.requestAccessToken();
+    },
+    
+    // Handle sign-out button click
+    handleSignoutClick: function() {
+        this.debugLog('Signout button clicked');
+        
+        if (this.state.isLoading) {
+            this.showError('Please wait for current operation to complete.');
+            return;
+        }
+        
+        if (this.state.userId) {
+            StorageService.clearUserData(this.state.userId);
+        }
+        
+        // Clear contacts display
+        this.state.contacts = [];
+        this.state.filteredContacts = [];
+        this.state.userId = null;
+        this.updateContactsDisplay();
+        
+        // Reset UI
+        document.getElementById('contacts-card').style.display = 'none';
+        document.getElementById('user-info').style.display = 'none';
+        document.getElementById('auth-status').style.display = 'block';
+        
+        // Sign out
+        const token = gapi.client.getToken();
+        if (token !== null) {
+            google.accounts.oauth2.revoke(token.access_token);
+            gapi.client.setToken('');
+        }
+        
+        this.state.isSignedIn = false;
+    },
+    
+    // Handle sync button click
+    handleSyncClick: function() {
+        this.debugLog('Sync button clicked');
+        
+        if (this.state.isLoading) {
+            this.showError('Already syncing contacts. Please wait.');
+            return;
+        }
+        
+        if (this.state.isOffline) {
+            this.showError('You are offline. Sync will be available when you reconnect.');
+            return;
+        }
+        
+        this.syncContacts();
+    },
+    
+    // Handle search input
+    handleSearch: function(event) {
+        const searchTerm = event.target.value.toLowerCase();
+        
+        if (searchTerm === '') {
+            this.filteredContacts = this.state.contacts;
+        } else {
+            this.state.filteredContacts = this.state.contacts.filter(contact => {
+                const name = contact.name.toLowerCase();
+                const email = contact.email.toLowerCase();
+                const phone = contact.phone.toLowerCase();
+                
+                return name.includes(searchTerm) || 
+                      email.includes(searchTerm) || 
+                      phone.includes(searchTerm);
+            });
+        }
+        
+        this.updateContactsDisplay();
+    },
+    
+    // Process after successful authentication
     onSuccessfulAuth: async function() {
-        console.log('Authentication successful');
-        this.state.isSignedIn = true;
+        this.debugLog('Authentication successful');
         
         try {
-            // Get user info for display
-            const userInfo = await this.getUserInfo();
-            document.getElementById('user-name').textContent = userInfo.name;
+            // Show that we're signed in
+            this.state.isSignedIn = true;
+            document.getElementById('auth-status').style.display = 'none';
+            document.getElementById('user-info').style.display = 'block';
+            document.getElementById('contacts-card').style.display = 'block';
+            
+            // Get user info
+            this.setLoadingState(true, 'Getting user info...');
             
             // Get user ID for storage
             this.state.userId = await ContactsService.getUserId();
-            console.log('User ID retrieved:', this.state.userId);
+            this.debugLog('Retrieved user ID: ' + this.state.userId);
             
-            // Initialize storage service
+            // Initialize storage service with user ID
             await StorageService.init(this.state.userId);
-            console.log('Storage service initialized');
             
-            // Update UI for signed-in state
-            this.updateSignedInState(true);
+            // Get basic profile
+            const profile = await this.getUserProfile();
+            if (profile) {
+                document.getElementById('user-name').textContent = profile.name || 'Unknown';
+            }
             
-            // Check if we need to load contacts
-            if (StorageService.needsSync(this.state.userId)) {
-                console.log('No cached contacts or cache expired, fetching from Google');
-                await this.syncContacts();
+            // Try to load contacts from local storage first
+            const storedContacts = await StorageService.loadContacts(this.state.userId);
+            
+            // Update last sync time display
+            this.updateLastSyncTime();
+            
+            // If we have stored contacts and don't need to sync, show them
+            if (storedContacts && !StorageService.needsSync(this.state.userId)) {
+                this.debugLog(`Loaded ${storedContacts.length} contacts from storage`);
+                
+                // Process contacts for display
+                this.processAndDisplayContacts(storedContacts);
+                this.setLoadingState(false);
+                
+                // Update sync status
+                document.getElementById('sync-status').textContent = 'Using locally stored contacts';
             } else {
-                console.log('Loading contacts from local storage');
-                await this.loadContactsFromStorage();
+                // Otherwise, fetch fresh contacts
+                this.debugLog('No stored contacts or sync needed, fetching from API');
+                document.getElementById('sync-status').textContent = 'Syncing contacts...';
+                await this.syncContacts();
             }
         } catch (error) {
-            console.error('Error during authentication flow:', error);
-            this.showError('Error setting up your account: ' + error.message);
-            this.setLoading(false);
+            console.error('Error after authentication:', error);
+            this.showError('Error initializing app after sign-in: ' + error.message);
+            this.setLoadingState(false);
         }
     },
     
-    // Get user info
-    getUserInfo: async function() {
+    // Fetch user profile
+    getUserProfile: async function() {
         try {
             const response = await gapi.client.people.people.get({
                 resourceName: 'people/me',
-                personFields: 'names'
+                personFields: 'names,emailAddresses',
             });
             
-            const name = response.result.names && response.result.names.length > 0
-                ? response.result.names[0].displayName
-                : 'Unknown User';
-                
-            return { name: name };
+            if (response.result && response.result.names && response.result.names.length > 0) {
+                return {
+                    name: response.result.names[0].displayName
+                };
+            }
+            
+            return null;
         } catch (error) {
-            console.error('Failed to get user info:', error);
-            return { name: 'User' };
+            console.error('Error fetching user profile:', error);
+            return null;
         }
     },
     
-    // Handle syncing contacts
-    handleSyncClick: async function() {
-        console.log('Sync button clicked');
-        
-        // Show sync overlay
-        document.getElementById('syncing-overlay').style.display = 'flex';
-        document.getElementById('sync-status').textContent = 'Syncing...';
+    // Sync contacts with Google
+    syncContacts: async function() {
+        if (this.state.isLoading) return;
         
         try {
-            await this.syncContacts();
-            document.getElementById('sync-status').textContent = 'Sync completed successfully';
+            // Show syncing overlay
+            document.getElementById('syncing-overlay').style.display = 'flex';
+            this.setLoadingState(true, 'Starting contact sync...');
+            
+            // Fetch contacts from Google API with progress updates
+            const syncProgress = (message) => {
+                document.getElementById('sync-message').textContent = message;
+                document.getElementById('sync-status').textContent = message;
+            };
+            
+            const contacts = await ContactsService.fetchAllContacts(syncProgress);
+            
+            // Process and display contacts
+            this.debugLog(`Synced ${contacts.length} contacts from Google`);
+            
+            // Process contacts to ensure consistent format and reduce size
+            const processedContacts = ContactsService.processContacts(contacts);
+            
+            // Save to encrypted local storage
+            syncProgress('Saving contacts to encrypted storage...');
+            await StorageService.saveContacts(processedContacts, this.state.userId);
+            
+            // Process for display
+            this.processAndDisplayContacts(processedContacts);
+            
+            // Update last sync time display
+            this.updateLastSyncTime();
+            
+            // Update status
+            document.getElementById('sync-status').textContent = 'Contacts synced successfully';
+            
+            this.setLoadingState(false);
+            // Hide syncing overlay
+            document.getElementById('syncing-overlay').style.display = 'none';
         } catch (error) {
-            console.error('Failed to sync contacts:', error);
-            document.getElementById('sync-status').textContent = 'Sync failed';
+            console.error('Error syncing contacts:', error);
             this.showError('Failed to sync contacts: ' + error.message);
-        } finally {
-            // Hide sync overlay
+            this.setLoadingState(false);
             document.getElementById('syncing-overlay').style.display = 'none';
         }
     },
     
-    // Sync contacts from Google
-    syncContacts: async function() {
-        try {
-            // Update sync status
-            document.getElementById('sync-message').textContent = 'Connecting to Google...';
-            
-            // Fetch contacts with progress updates
-            const updateProgress = (message) => {
-                document.getElementById('sync-message').textContent = message;
-            };
-            
-            const rawContacts = await ContactsService.fetchAllContacts(updateProgress);
-            console.log(`Fetched ${rawContacts.length} contacts from Google`);
-            
-            // Process contacts
-            updateProgress('Processing contacts...');
-            const processedContacts = ContactsService.processContacts(rawContacts);
-            
-            // Save to local storage
-            updateProgress('Saving contacts to local storage...');
-            await StorageService.saveContacts(processedContacts, this.state.userId);
-            
-            // Load contacts to display
-            this.state.contacts = processedContacts;
-            this.filterAndDisplayContacts();
-            
-            // Update sync time display
-            this.updateLastSyncTime();
-            
-            console.log('Contact sync completed successfully');
-            return true;
-        } catch (error) {
-            console.error('Error syncing contacts:', error);
-            throw error;
-        }
+    // Process contacts from API or storage and display them
+    processAndDisplayContacts: function(contacts) {
+        // Convert contacts to display format
+        this.state.contacts = contacts.map(contact => 
+            ContactsService.formatContactForDisplay(contact)
+        );
+        
+        // Set filtered contacts to all contacts initially
+        this.state.filteredContacts = this.state.contacts;
+        
+        // Update the contact count
+        document.getElementById('contact-count').textContent = this.state.contacts.length;
+        
+        // Update the display
+        this.updateContactsDisplay();
     },
     
-    // Load contacts from local storage
-    loadContactsFromStorage: async function() {
-        try {
-            this.setLoading(true);
-            
-            // Try to load from storage
-            const contacts = await StorageService.loadContacts(this.state.userId);
-            
-            if (contacts && contacts.length > 0) {
-                console.log(`Loaded ${contacts.length} contacts from local storage`);
-                this.state.contacts = contacts;
-                this.filterAndDisplayContacts();
-                
-                // Update sync time display
-                this.updateLastSyncTime();
-                
-                return true;
+    // Update the contacts display
+    updateContactsDisplay: function() {
+        const contactsContainer = document.getElementById('contacts-container');
+        contactsContainer.innerHTML = '';
+        
+        // Show message if no contacts
+        if (this.state.filteredContacts.length === 0) {
+            if (this.state.contacts.length === 0) {
+                contactsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>No contacts found. Sync to retrieve your contacts.</p>
+                    </div>
+                `;
             } else {
-                console.log('No contacts in storage or empty array, fetching from Google');
-                return await this.syncContacts();
+                contactsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>No contacts match your search.</p>
+                    </div>
+                `;
             }
-        } catch (error) {
-            console.error('Error loading contacts from storage:', error);
-            this.showError('Failed to load contacts: ' + error.message);
-            return false;
-        } finally {
-            this.setLoading(false);
+            return;
         }
+        
+        // Create HTML for each contact
+        this.state.filteredContacts.forEach(contact => {
+            const contactElement = document.createElement('div');
+            contactElement.className = 'contact-item';
+            
+            contactElement.innerHTML = `
+                <div class="contact-name">${this.escapeHtml(contact.name)}</div>
+                ${contact.email ? `<div class="contact-email">${this.escapeHtml(contact.email)}</div>` : ''}
+                ${contact.phone ? `<div class="contact-phone">${this.escapeHtml(contact.phone)}</div>` : ''}
+            `;
+            
+            contactsContainer.appendChild(contactElement);
+        });
     },
     
     // Update the last sync time display
     updateLastSyncTime: function() {
-        const lastSyncElement = document.getElementById('last-sync-time');
         const lastSync = StorageService.getLastSyncTime(this.state.userId);
+        const lastSyncElement = document.getElementById('last-sync-time');
         
         if (lastSync) {
             const date = new Date(lastSync);
@@ -348,161 +463,117 @@ const App = {
         }
     },
     
-    // Filter and display contacts
-    filterAndDisplayContacts: function() {
-        // Apply search filter if any
-        if (this.state.searchTerm) {
-            const searchTerm = this.state.searchTerm.toLowerCase();
-            this.state.filteredContacts = this.state.contacts.filter(contact => {
-                // Check names
-                if (contact.names && contact.names.length > 0) {
-                    const name = contact.names[0].displayName.toLowerCase();
-                    if (name.includes(searchTerm)) {
-                        return true;
-                    }
-                }
-                
-                // Check emails
-                if (contact.emailAddresses && contact.emailAddresses.length > 0) {
-                    for (const email of contact.emailAddresses) {
-                        if (email.value.toLowerCase().includes(searchTerm)) {
-                            return true;
-                        }
-                    }
-                }
-                
-                // Check phone numbers
-                if (contact.phoneNumbers && contact.phoneNumbers.length > 0) {
-                    for (const phone of contact.phoneNumbers) {
-                        if (phone.value.toLowerCase().includes(searchTerm)) {
-                            return true;
-                        }
-                    }
-                }
-                
-                return false;
-            });
-        } else {
-            this.state.filteredContacts = this.state.contacts;
-        }
-        
-        // Update contact count
-        document.getElementById('contact-count').textContent = this.state.filteredContacts.length;
-        
-        // Display contacts
-        const container = document.getElementById('contacts-container');
-        container.innerHTML = '';
-        
-        if (this.state.filteredContacts.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <p>No contacts found</p>
-                </div>
-            `;
-            return;
-        }
-        
-        for (const contact of this.state.filteredContacts) {
-            const formattedContact = ContactsService.formatContactForDisplay(contact);
-            
-            const contactElement = document.createElement('div');
-            contactElement.className = 'contact-item';
-            contactElement.innerHTML = `
-                <div class="contact-name">${formattedContact.name}</div>
-                ${formattedContact.email ? `<div class="contact-email">${formattedContact.email}</div>` : ''}
-                ${formattedContact.phone ? `<div class="contact-phone">${formattedContact.phone}</div>` : ''}
-            `;
-            
-            container.appendChild(contactElement);
-        }
-    },
-    
-    // Handle search input
-    handleSearch: function(event) {
-        this.state.searchTerm = event.target.value.trim();
-        this.filterAndDisplayContacts();
-    },
-    
-    // Handle sign-out button click
-    handleSignoutClick: function() {
-        console.log('Sign out button clicked');
-        
-        const token = gapi.client.getToken();
-        if (token !== null) {
-            google.accounts.oauth2.revoke(token.access_token);
-            gapi.client.setToken('');
-            console.log('Token revoked and removed from client');
-        }
-        
-        // Clear user data from storage
-        if (this.state.userId) {
-            StorageService.clearUserData(this.state.userId);
-        }
-        
-        // Reset state
-        this.state.isSignedIn = false;
-        this.state.contacts = [];
-        this.state.filteredContacts = [];
-        this.state.userId = null;
-        
-        // Update UI
-        this.updateSignedInState(false);
-        console.log('Signed out successfully');
-    },
-    
-    // Update the UI based on sign-in state
-    updateSignedInState: function(isSignedIn) {
-        document.getElementById('auth-status').style.display = isSignedIn ? 'none' : 'block';
-        document.getElementById('user-info').style.display = isSignedIn ? 'block' : 'none';
-        document.getElementById('contacts-card').style.display = isSignedIn ? 'block' : 'none';
-    },
-    
-    // Set loading state
-    setLoading: function(isLoading) {
-        this.state.isLoading = isLoading;
-        document.getElementById('loader').style.display = isLoading ? 'block' : 'none';
-    },
-    
     // Show error message
     showError: function(message) {
-        console.error('Error:', message);
+        console.error('App error:', message);
+        
         const errorContainer = document.getElementById('error-container');
-        errorContainer.innerHTML = `<p>${message}</p>`;
+        errorContainer.innerHTML = `<p>${this.escapeHtml(message)}</p>`;
         errorContainer.style.display = 'block';
         
-        // Hide error after 5 seconds
+        // Auto-hide after 5 seconds
         setTimeout(() => {
             errorContainer.style.display = 'none';
         }, 5000);
+    },
+    
+    // Set loading state
+    setLoadingState: function(isLoading, message) {
+        this.state.isLoading = isLoading;
+        const loader = document.getElementById('loader');
+        
+        if (isLoading) {
+            loader.style.display = 'block';
+            if (message) {
+                document.getElementById('sync-status').textContent = message;
+            }
+        } else {
+            loader.style.display = 'none';
+        }
+    },
+    
+    // Update online/offline status
+    updateOnlineStatus: function() {
+        this.state.isOffline = !navigator.onLine;
+        const offlineIndicator = document.getElementById('offline-indicator');
+        
+        if (this.state.isOffline) {
+            // Create offline indicator if it doesn't exist
+            if (!offlineIndicator) {
+                const indicator = document.createElement('div');
+                indicator.id = 'offline-indicator';
+                indicator.className = 'offline-indicator';
+                indicator.textContent = 'You are offline';
+                document.body.appendChild(indicator);
+                
+                // Make visible after a short delay for animation
+                setTimeout(() => {
+                    indicator.className = 'offline-indicator visible';
+                }, 100);
+            } else {
+                offlineIndicator.className = 'offline-indicator visible';
+            }
+            
+            // Disable sync button
+            const syncButton = document.getElementById('sync-button');
+            if (syncButton) {
+                syncButton.disabled = true;
+            }
+        } else {
+            // Hide offline indicator
+            if (offlineIndicator) {
+                offlineIndicator.className = 'offline-indicator';
+            }
+            
+            // Enable sync button
+            const syncButton = document.getElementById('sync-button');
+            if (syncButton) {
+                syncButton.disabled = false;
+            }
+        }
+    },
+    
+    // Escape HTML to prevent XSS
+    escapeHtml: function(text) {
+        if (!text) return '';
+        
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 };
 
-// Initialize app when document is ready
+// Initialize the app when the page is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if all required scripts are loaded
-    if (typeof gapi !== 'undefined' && 
-        typeof google !== 'undefined' && 
-        typeof CONFIG !== 'undefined' &&
-        typeof StorageService !== 'undefined' &&
-        typeof ContactsService !== 'undefined') {
-        // Initialize the app
-        App.init();
-    } else {
-        console.error('Required scripts not loaded');
+    // Check if config is available
+    if (typeof CONFIG === 'undefined') {
+        console.error('CONFIG object not available. Check if config.js is loaded properly.');
         const errorContainer = document.getElementById('error-container');
         if (errorContainer) {
             errorContainer.innerHTML = `
-                <h3>Failed to Load Application</h3>
-                <p>One or more required scripts failed to load.</p>
-                <button onclick="location.reload()">Reload Page</button>
+                <h3>Configuration Error</h3>
+                <p>The application configuration could not be loaded. Please check your environment variables and refresh the page.</p>
             `;
             errorContainer.style.display = 'block';
         }
         
-        // Hide the initial loader
-        const initialLoader = document.getElementById('initial-loader');
-        if (initialLoader) {
-            initialLoader.style.display = 'none';
+        // Hide loader
+        const loader = document.getElementById('initial-loader');
+        if (loader) {
+            loader.style.display = 'none';
         }
+        return;
     }
+    
+    // Initialize the app
+    App.init();
 });
+
+// Enable debug mode with URL parameter
+if (window.location.search.includes('debug=true')) {
+    App.DEBUG_MODE = true;
+    console.log('Debug mode enabled');
+}

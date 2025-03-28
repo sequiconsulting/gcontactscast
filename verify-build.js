@@ -89,8 +89,8 @@ if (!fs.existsSync(configPath)) {
     // Write a default config as fallback
     const fallbackConfig = `// FALLBACK CONFIG - CREATED BY VERIFY SCRIPT
 const CONFIG = {
-    CLIENT_ID: '${process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID'}',
-    API_KEY: '${process.env.GOOGLE_API_KEY || 'YOUR_GOOGLE_API_KEY'}',
+    CLIENT_ID: '${process.env.GOOGLE_CLIENT_ID || 'MISSING_CLIENT_ID_CHECK_ENV_VARS'}',
+    API_KEY: '${process.env.GOOGLE_API_KEY || 'MISSING_API_KEY_CHECK_ENV_VARS'}',
     SCOPES: 'https://www.googleapis.com/auth/contacts.readonly',
     DISCOVERY_DOC: 'https://people.googleapis.com/$discovery/rest?version=v1',
     VERSION: 'fallback-${new Date().toISOString()}'

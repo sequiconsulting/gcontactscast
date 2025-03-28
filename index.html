@@ -19,7 +19,7 @@
 
         <!-- Loading indicator for initial scripts -->
         <div id="initial-loader" class="initial-loading">
-            <div class="loader"></div>
+            <div class="loader" style="display: block;"></div>
             <p>Loading application...</p>
         </div>
 
@@ -62,7 +62,7 @@
         <!-- Sync overlay -->
         <div id="syncing-overlay" class="syncing-overlay">
             <div class="syncing-message">
-                <div class="loader"></div>
+                <div class="loader" style="display: block;"></div>
                 <p id="sync-message">Syncing your contacts...</p>
             </div>
         </div>
@@ -73,7 +73,7 @@
         </footer>
     </div>
 
-    <!-- Script loading with error handling -->
+    <!-- Script loading with error handling and explicit sequence -->
     <script>
         // Set up global error handler
         window.addEventListener('error', function(event) {
@@ -94,11 +94,21 @@
             }
         });
         
-        // Function to load scripts sequentially
+        // Function to add a debug message to the page
+        function debugMessage(message) {
+            console.log(message);
+            var debugInfo = document.getElementById('debug-info');
+            if (debugInfo) {
+                debugInfo.style.display = 'block';
+                debugInfo.innerHTML += `<p>${message}</p>`;
+            }
+        }
+        
+        // Function to load scripts sequentially with better error handling
         function loadScripts(scripts, index) {
             if (index >= scripts.length) {
                 // All scripts loaded, hide loader
-                document.getElementById('initial-loader').style.display = 'none';
+                debugMessage("All scripts loaded successfully");
                 return;
             }
             
@@ -106,12 +116,12 @@
             script.src = scripts[index];
             
             script.onload = function() {
+                debugMessage(`Loaded: ${scripts[index]}`);
                 loadScripts(scripts, index + 1);
             };
             
             script.onerror = function() {
                 console.error('Failed to load script:', scripts[index]);
-                document.getElementById('initial-loader').style.display = 'none';
                 
                 var errorContainer = document.getElementById('error-container');
                 if (errorContainer) {
@@ -122,51 +132,86 @@
                     `;
                     errorContainer.style.display = 'block';
                 }
+                
+                // Try to continue loading other scripts
+                loadScripts(scripts, index + 1);
             };
             
+            // Add specific timeout for Google scripts
+            if (scripts[index].includes('google') || scripts[index].includes('gapi')) {
+                script.timeout = 10000; // 10 seconds timeout for Google scripts
+            }
+            
+            debugMessage(`Loading: ${scripts[index]}`);
             document.body.appendChild(script);
         }
         
-        // Start loading external Google API scripts
-        // These need to load before our app scripts
-        var googleScripts = [
-            "https://apis.google.com/js/api.js",
-            "https://accounts.google.com/gsi/client"
-        ];
-        
-        // Our app scripts - load these after Google scripts
-        var appScripts = [
-            "js/config.js",
-            "js/storage-service.js",
-            "js/contacts-service.js",
-            "js/app.js"
-        ];
-        
-        // First load Google scripts
-        loadScripts(googleScripts, 0);
-        
-        // When Google scripts are done, load app scripts
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                if (typeof gapi !== 'undefined' && typeof google !== 'undefined') {
-                    loadScripts(appScripts, 0);
-                } else {
-                    console.error('Google APIs failed to load properly');
-                    document.getElementById('initial-loader').style.display = 'none';
+        // Start loading external Google API scripts with proper callbacks
+        function loadGoogleAPIs() {
+            debugMessage("Starting Google API loading sequence");
+            
+            // Load gapi.js first
+            var gapiScript = document.createElement('script');
+            gapiScript.src = "https://apis.google.com/js/api.js";
+            gapiScript.async = true;
+            gapiScript.defer = true;
+            
+            gapiScript.onload = function() {
+                debugMessage("Google API (gapi.js) loaded, loading GIS next");
+                
+                // Now load Google Identity Services
+                var gisScript = document.createElement('script');
+                gisScript.src = "https://accounts.google.com/gsi/client";
+                gisScript.async = true;
+                gisScript.defer = true;
+                
+                gisScript.onload = function() {
+                    debugMessage("Google Identity Services loaded, loading app scripts next");
                     
+                    // Now load our app scripts
+                    var appScripts = [
+                        "js/config.js",
+                        "js/storage-service.js",
+                        "js/contacts-service.js",
+                        "js/app.js"
+                    ];
+                    
+                    loadScripts(appScripts, 0);
+                };
+                
+                gisScript.onerror = function() {
+                    console.error('Failed to load Google Identity Services');
                     var errorContainer = document.getElementById('error-container');
                     if (errorContainer) {
                         errorContainer.innerHTML = `
-                            <h3>Failed to Load Google APIs</h3>
-                            <p>The application could not load required Google APIs.</p>
+                            <h3>Failed to Load Google Identity Services</h3>
+                            <p>The application could not load Google Identity Services.</p>
                             <p>Please check your internet connection and try again.</p>
                             <button onclick="location.reload()">Reload Page</button>
                         `;
                         errorContainer.style.display = 'block';
                     }
+                };
+                
+                document.body.appendChild(gisScript);
+            };
+            
+            gapiScript.onerror = function() {
+                console.error('Failed to load Google API');
+                var errorContainer = document.getElementById('error-container');
+                if (errorContainer) {
+                    errorContainer.innerHTML = `
+                        <h3>Failed to Load Google API</h3>
+                        <p>The application could not load Google API (gapi).</p>
+                        <p>Please check your internet connection and try again.</p>
+                        <button onclick="location.reload()">Reload Page</button>
+                    `;
+                    errorContainer.style.display = 'block';
                 }
-            }, 1000); // Give a little time for Google scripts to initialize
-        });
+            };
+            
+            document.body.appendChild(gapiScript);
+        }
         
         // Update app version if available
         document.addEventListener('DOMContentLoaded', function() {
@@ -174,6 +219,9 @@
             if (versionElement && window.CONFIG && window.CONFIG.VERSION) {
                 versionElement.textContent = window.CONFIG.VERSION.split('T')[0]; // Just show the date part
             }
+            
+            // Start loading Google APIs
+            loadGoogleAPIs();
         });
     </script>
 </body>

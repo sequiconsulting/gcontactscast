@@ -3,11 +3,11 @@
   command = "npm run build"
 
 [build.environment]
-  NODE_VERSION = "18"
+  NODE_VERSION = "22"
+  NPM_VERSION = "10"
 
-# Use an existing debug plugin
-[[plugins]]
-  package = "@netlify/plugin-lighthouse"
+# Important: The environment variables GOOGLE_CLIENT_ID and GOOGLE_API_KEY
+# must be set in the Netlify dashboard under Site settings > Build & deploy > Environment
 
 # Redirect all requests to index.html
 [[redirects]]
