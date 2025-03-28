@@ -129,6 +129,7 @@ footer {
     font-size: 14px;
 }
 
+/* Error messages with transitions */
 .error-message {
     color: #d32f2f;
     background-color: #fde8e8;
@@ -136,6 +137,40 @@ footer {
     border-radius: 4px;
     margin: 10px 0;
     font-size: 14px;
+    transition: opacity 0.5s ease-in-out;
+    opacity: 1;
+    position: relative;
+}
+
+/* Add a close button to error messages */
+.error-message::after {
+    content: '×';
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* Fatal error that prevents app operation */
+.fatal-error-message {
+    color: #d32f2f;
+    background-color: #fde8e8;
+    padding: 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+    font-size: 16px;
+    text-align: center;
+    border: 2px solid #d32f2f;
+}
+
+.fatal-error-message button {
+    background-color: #d32f2f;
+    margin-top: 15px;
+}
+
+.fatal-error-message button:hover {
+    background-color: #b71c1c;
 }
 
 .sync-info {
@@ -168,6 +203,31 @@ footer {
     background-color: #c53929;
 }
 
+/* Initial app loading indicator */
+.initial-loading {
+    text-align: center;
+    padding: 30px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin: 20px 0;
+}
+
+.initial-loading p {
+    color: #666;
+    margin-top: 15px;
+}
+
+/* Error container for application errors */
+.error-container {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: #fff0f0;
+    border: 1px solid #ffcdd2;
+    border-radius: 8px;
+    text-align: center;
+}
+
 /* Add a blurred loading overlay when syncing */
 .syncing-overlay {
     position: fixed;
@@ -190,4 +250,61 @@ footer {
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     text-align: center;
+    max-width: 80%;
+}
+
+/* Offline indicator */
+.offline-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #f44336;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.offline-indicator.visible {
+    opacity: 1;
+}
+
+/* Empty state for no contacts */
+.empty-state {
+    text-align: center;
+    padding: 30px;
+    color: #666;
+}
+
+.empty-state img {
+    max-width: 120px;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* Media queries for mobile responsiveness */
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+    
+    .card {
+        padding: 15px;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    button {
+        margin-right: 0;
+        margin-bottom: 10px;
+        width: 100%;
+    }
+    
+    button:last-child {
+        margin-bottom: 0;
+    }
 }

@@ -7,6 +7,8 @@
     <title>Google Contacts Viewer</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <!-- Add meta description for SEO -->
+    <meta name="description" content="A secure Google Contacts Viewer that encrypts and stores your contacts locally">
 </head>
 <body>
     <div class="container">
@@ -15,7 +17,13 @@
             <p>Connect with Google to view your contacts (locally stored & encrypted)</p>
         </header>
 
-        <div class="card">
+        <!-- Loading indicator for initial scripts -->
+        <div id="initial-loader" class="initial-loading">
+            <div class="loader"></div>
+            <p>Loading application...</p>
+        </div>
+
+        <div class="card" id="auth-card">
             <div id="auth-status">
                 <p>Please sign in to view your contacts.</p>
                 <button id="signin-button" disabled>Sign in with Google</button>
@@ -47,18 +55,126 @@
             <div class="loader" id="loader"></div>
             <div id="contacts-container"></div>
         </div>
+
+        <!-- Error container for displaying application errors -->
+        <div id="error-container" class="error-container" style="display: none;"></div>
+        
+        <!-- Sync overlay -->
+        <div id="syncing-overlay" class="syncing-overlay">
+            <div class="syncing-message">
+                <div class="loader"></div>
+                <p id="sync-message">Syncing your contacts...</p>
+            </div>
+        </div>
         
         <footer>
             <p>This app securely stores your contacts in your browser with encryption. No data is sent to our servers.</p>
+            <p>Version: <span id="app-version">1.0.0</span> | <a href="debug.html">Debug Page</a></p>
         </footer>
     </div>
 
-    <!-- Load the Google API client and Identity Services library -->
-    <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client"></script>
-    <script src="js/config.js"></script>
-    <script src="js/storage-service.js"></script>
-    <script src="js/contacts-service.js"></script>
-    <script src="js/app.js"></script>
+    <!-- Script loading with error handling -->
+    <script>
+        // Set up global error handler
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.message);
+            // Hide loader if there's an error
+            document.getElementById('initial-loader').style.display = 'none';
+            
+            // Show error message
+            var errorContainer = document.getElementById('error-container');
+            if (errorContainer) {
+                errorContainer.innerHTML = `
+                    <h3>Error Loading Application</h3>
+                    <p>There was a problem loading the application resources.</p>
+                    <p>Error details: ${event.message}</p>
+                    <button onclick="location.reload()">Reload Page</button>
+                `;
+                errorContainer.style.display = 'block';
+            }
+        });
+        
+        // Function to load scripts sequentially
+        function loadScripts(scripts, index) {
+            if (index >= scripts.length) {
+                // All scripts loaded, hide loader
+                document.getElementById('initial-loader').style.display = 'none';
+                return;
+            }
+            
+            var script = document.createElement('script');
+            script.src = scripts[index];
+            
+            script.onload = function() {
+                loadScripts(scripts, index + 1);
+            };
+            
+            script.onerror = function() {
+                console.error('Failed to load script:', scripts[index]);
+                document.getElementById('initial-loader').style.display = 'none';
+                
+                var errorContainer = document.getElementById('error-container');
+                if (errorContainer) {
+                    errorContainer.innerHTML = `
+                        <h3>Failed to Load Application</h3>
+                        <p>Could not load required script: ${scripts[index]}</p>
+                        <button onclick="location.reload()">Reload Page</button>
+                    `;
+                    errorContainer.style.display = 'block';
+                }
+            };
+            
+            document.body.appendChild(script);
+        }
+        
+        // Start loading external Google API scripts
+        // These need to load before our app scripts
+        var googleScripts = [
+            "https://apis.google.com/js/api.js",
+            "https://accounts.google.com/gsi/client"
+        ];
+        
+        // Our app scripts - load these after Google scripts
+        var appScripts = [
+            "js/config.js",
+            "js/storage-service.js",
+            "js/contacts-service.js",
+            "js/app.js"
+        ];
+        
+        // First load Google scripts
+        loadScripts(googleScripts, 0);
+        
+        // When Google scripts are done, load app scripts
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (typeof gapi !== 'undefined' && typeof google !== 'undefined') {
+                    loadScripts(appScripts, 0);
+                } else {
+                    console.error('Google APIs failed to load properly');
+                    document.getElementById('initial-loader').style.display = 'none';
+                    
+                    var errorContainer = document.getElementById('error-container');
+                    if (errorContainer) {
+                        errorContainer.innerHTML = `
+                            <h3>Failed to Load Google APIs</h3>
+                            <p>The application could not load required Google APIs.</p>
+                            <p>Please check your internet connection and try again.</p>
+                            <button onclick="location.reload()">Reload Page</button>
+                        `;
+                        errorContainer.style.display = 'block';
+                    }
+                }
+            }, 1000); // Give a little time for Google scripts to initialize
+        });
+        
+        // Update app version if available
+        document.addEventListener('DOMContentLoaded', function() {
+            var versionElement = document.getElementById('app-version');
+            if (versionElement && window.CONFIG && window.CONFIG.VERSION) {
+                versionElement.textContent = window.CONFIG.VERSION.split('T')[0]; // Just show the date part
+            }
+        });
+    </script>
 </body>
 </html>
