@@ -5,6 +5,10 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Use an existing debug plugin
+[[plugins]]
+  package = "@netlify/plugin-lighthouse"
+
 # Redirect all requests to index.html
 [[redirects]]
   from = "/*"

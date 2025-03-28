@@ -11,7 +11,8 @@
   "devDependencies": {
     "dotenv": "^16.3.1",
     "fs-extra": "^11.1.1",
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "netlify-plugin-debug": "^1.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
