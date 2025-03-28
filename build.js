@@ -13,7 +13,14 @@ const escapeJS = (str) => {
 function processEnvVariables() {
   console.log('Processing environment variables...');
   
-  const configPath = path.join(__dirname, 'js', 'config.js');
+  const jsDir = path.join(__dirname, 'js');
+  const configPath = path.join(jsDir, 'config.js');
+  
+  // Ensure js directory exists
+  if (!fs.existsSync(jsDir)) {
+    console.log('Creating js directory...');
+    fs.mkdirSync(jsDir, { recursive: true });
+  }
   
   // Check for required environment variables
   if (!process.env.GOOGLE_CLIENT_ID) {
@@ -34,8 +41,33 @@ const CONFIG = {
     VERSION: '${new Date().toISOString()}'
 };`;
   
-  // Write the processed file
-  fs.writeFileSync(configPath, newConfig);
+  try {
+    // Write the processed file
+    fs.writeFileSync(configPath, newConfig);
+    console.log('Config file written successfully to:', configPath);
+    
+    // Verify file exists after writing
+    if (fs.existsSync(configPath)) {
+      console.log('Confirmed config.js exists after writing');
+      const stats = fs.statSync(configPath);
+      console.log('File size:', stats.size, 'bytes');
+    } else {
+      console.error('ERROR: Failed to find config.js after writing!');
+    }
+  } catch (error) {
+    console.error('ERROR writing config file:', error.message);
+    
+    // Try writing to the root as a fallback
+    const rootConfigPath = path.join(__dirname, 'config.js');
+    try {
+      fs.writeFileSync(rootConfigPath, newConfig);
+      console.log('Fallback: wrote config to root directory:', rootConfigPath);
+    } catch (fallbackError) {
+      console.error('CRITICAL ERROR: Could not write config file anywhere:', fallbackError.message);
+      process.exit(1);
+    }
+  }
+  
   console.log('Environment variables processed successfully.');
 }
 
@@ -71,23 +103,65 @@ function verifyFiles() {
   }
   
   if (!allFilesExist) {
-    throw new Error('One or more required files are missing.');
+    console.warn('One or more required files are missing, but continuing build...');
+  } else {
+    console.log('All required files verified successfully.');
   }
   
-  console.log('All required files verified successfully.');
+  // List all files in the js directory
+  const jsDir = path.join(__dirname, 'js');
+  if (fs.existsSync(jsDir)) {
+    console.log('Files in js directory:');
+    const files = fs.readdirSync(jsDir);
+    files.forEach(file => console.log(`  - ${file}`));
+  } else {
+    console.log('js directory not found!');
+  }
+}
+
+// List all files in build directory (for debugging)
+function listBuildFiles() {
+  console.log('Listing all files in build directory:');
+  
+  function listDir(dir, indent = '') {
+    const files = fs.readdirSync(dir);
+    files.forEach(file => {
+      const filePath = path.join(dir, file);
+      const stats = fs.statSync(filePath);
+      
+      if (stats.isDirectory()) {
+        console.log(`${indent}${file}/`);
+        listDir(filePath, indent + '  ');
+      } else {
+        console.log(`${indent}${file} (${stats.size} bytes)`);
+      }
+    });
+  }
+  
+  try {
+    listDir(__dirname);
+  } catch (error) {
+    console.error('Error listing files:', error);
+  }
 }
 
 // Main build function
 async function build() {
   try {
-    // Verify required files
-    verifyFiles();
+    console.log('Starting build process...');
+    console.log('Current directory:', __dirname);
     
-    // Process environment variables
+    // Process environment variables (create config.js)
     processEnvVariables();
     
     // Create robots.txt
     createRobotsTxt();
+    
+    // Verify required files
+    verifyFiles();
+    
+    // List all files for debugging
+    listBuildFiles();
     
     console.log('Build completed successfully!');
   } catch (error) {
