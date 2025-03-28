@@ -8,13 +8,16 @@ const GoogleContactsApp = {
         tokenClient: null,
         gapiInited: false,
         gisInited: false,
-        contacts: []
+        contacts: [],
+        userId: null,
+        isSyncing: false
     },
 
     // DOM elements
     elements: {
         signinButton: document.getElementById('signin-button'),
         signoutButton: document.getElementById('signout-button'),
+        syncButton: document.getElementById('sync-button'),
         authStatus: document.getElementById('auth-status'),
         userInfo: document.getElementById('user-info'),
         contactsCard: document.getElementById('contacts-card'),
@@ -22,14 +25,15 @@ const GoogleContactsApp = {
         userName: document.getElementById('user-name'),
         loader: document.getElementById('loader'),
         searchInput: document.getElementById('search-input'),
-        debugInfo: document.getElementById('debug-info') // New element for debugging
+        syncStatus: document.getElementById('sync-status'),
+        contactCount: document.getElementById('contact-count'),
+        lastSyncTime: document.getElementById('last-sync-time'),
+        debugInfo: document.getElementById('debug-info')
     },
 
     // Initialize the application
     init: function() {
         console.log('Initializing Google Contacts App');
-        console.log('Using CLIENT_ID:', CONFIG.CLIENT_ID);
-        console.log('Using API_KEY:', CONFIG.API_KEY);
         
         this.setupEventListeners();
         this.loadGapiClient();
@@ -42,6 +46,11 @@ const GoogleContactsApp = {
         this.elements.signinButton.addEventListener('click', this.handleAuthClick.bind(this));
         this.elements.signoutButton.addEventListener('click', this.handleSignoutClick.bind(this));
         this.elements.searchInput.addEventListener('input', this.handleSearch.bind(this));
+        
+        // Add sync button listener
+        if (this.elements.syncButton) {
+            this.elements.syncButton.addEventListener('click', this.handleSyncClick.bind(this));
+        }
     },
 
     // Load the Google API client
@@ -136,8 +145,7 @@ const GoogleContactsApp = {
             self.elements.userInfo.style.display = 'block';
             self.elements.contactsCard.style.display = 'block';
             
-            await self.getUserInfo();
-            self.listConnectionNames();
+            await self.initializeUserSession();
         };
         
         if (gapi.client.getToken() === null) {
@@ -146,6 +154,44 @@ const GoogleContactsApp = {
         } else {
             // Skip display of account chooser and consent dialog for an existing session
             this.state.tokenClient.requestAccessToken({prompt: ''});
+        }
+    },
+
+    // Initialize user session after successful auth
+    initializeUserSession: async function() {
+        try {
+            this.elements.loader.style.display = 'block';
+            
+            // Get user info and display user name
+            await this.getUserInfo();
+            
+            // Get user ID for storage
+            this.state.userId = await ContactsService.getUserId();
+            console.log('User ID:', this.state.userId);
+            
+            // Initialize storage service
+            await StorageService.init(this.state.userId);
+            
+            // Check if we have contacts in storage and whether we need to sync
+            const storedContacts = await StorageService.loadContacts(this.state.userId);
+            const needsSync = !storedContacts || StorageService.needsSync(this.state.userId);
+            
+            if (storedContacts && !needsSync) {
+                // We have contacts and don't need to sync
+                console.log(`Using ${storedContacts.length} contacts from local storage`);
+                this.state.contacts = storedContacts;
+                this.renderContacts(storedContacts);
+                this.updateSyncStatus();
+            } else {
+                // Need to sync
+                console.log('Initiating contact sync...');
+                await this.syncContacts();
+            }
+        } catch (error) {
+            console.error('Error initializing user session:', error);
+            this.showError('Error initializing user session: ' + error.message);
+        } finally {
+            this.elements.loader.style.display = 'none';
         }
     },
 
@@ -159,7 +205,95 @@ const GoogleContactsApp = {
             this.elements.userInfo.style.display = 'none';
             this.elements.contactsCard.style.display = 'none';
             this.elements.contactsContainer.innerHTML = '';
+            
+            // Clear state
             this.state.contacts = [];
+            
+            // Clear encrypted user data
+            if (this.state.userId) {
+                StorageService.clearUserData(this.state.userId);
+                this.state.userId = null;
+            }
+        }
+    },
+
+    // Handle sync button click
+    handleSyncClick: async function() {
+        if (this.state.isSyncing) {
+            return; // Prevent multiple syncs at once
+        }
+        
+        try {
+            await this.syncContacts();
+        } catch (error) {
+            console.error('Error during manual sync:', error);
+            this.showError('Error during contact sync: ' + error.message);
+        }
+    },
+
+    // Sync contacts with Google
+    syncContacts: async function() {
+        if (this.state.isSyncing) {
+            return; // Prevent multiple syncs at once
+        }
+        
+        this.state.isSyncing = true;
+        this.elements.loader.style.display = 'block';
+        
+        if (this.elements.syncStatus) {
+            this.elements.syncStatus.textContent = 'Syncing contacts...';
+        }
+        
+        try {
+            // Fetch all contacts using pagination
+            const updateProgress = (message) => {
+                if (this.elements.syncStatus) {
+                    this.elements.syncStatus.textContent = message;
+                }
+            };
+            
+            const allContacts = await ContactsService.fetchAllContacts(updateProgress);
+            
+            // Process contacts for storage
+            const processedContacts = ContactsService.processContacts(allContacts);
+            
+            // Save to local encrypted storage
+            await StorageService.saveContacts(processedContacts, this.state.userId);
+            
+            // Update state
+            this.state.contacts = processedContacts;
+            
+            // Render contacts
+            this.renderContacts(processedContacts);
+            
+            // Update UI with sync info
+            this.updateSyncStatus();
+            
+            console.log(`Synced ${processedContacts.length} contacts`);
+        } catch (error) {
+            console.error('Error syncing contacts:', error);
+            this.showError('Error syncing contacts: ' + error.message);
+        } finally {
+            this.state.isSyncing = false;
+            this.elements.loader.style.display = 'none';
+        }
+    },
+
+    // Update the sync status display
+    updateSyncStatus: function() {
+        if (this.elements.syncStatus && this.elements.lastSyncTime && this.elements.contactCount) {
+            const lastSync = StorageService.getLastSyncTime(this.state.userId);
+            
+            this.elements.syncStatus.textContent = 'Contacts synced successfully';
+            
+            if (lastSync) {
+                const lastSyncDate = new Date(lastSync);
+                this.elements.lastSyncTime.textContent = lastSyncDate.toLocaleString();
+            } else {
+                this.elements.lastSyncTime.textContent = 'Never';
+            }
+            
+            this.elements.contactCount.textContent = this.state.contacts.length;
         }
     },
 
@@ -180,42 +314,16 @@ const GoogleContactsApp = {
             this.showError('Error fetching user profile: ' + err.message);
         }
     },
-
-    // List connections (contacts)
-    listConnectionNames: async function() {
-        this.elements.loader.style.display = 'block';
-        this.elements.contactsContainer.innerHTML = '';
-        
-        try {
-            const response = await gapi.client.people.people.connections.list({
-                resourceName: 'people/me',
-                pageSize: 100,
-                personFields: 'names,emailAddresses,phoneNumbers',
-                sortOrder: 'FIRST_NAME_ASCENDING'
-            });
-            
-            const connections = response.result.connections;
-            if (!connections || connections.length === 0) {
-                this.elements.contactsContainer.innerHTML = '<p>No contacts found.</p>';
-                this.elements.loader.style.display = 'none';
-                return;
-            }
-            
-            // Store contacts for search functionality
-            this.state.contacts = connections;
-            
-            // Display contacts
-            this.renderContacts(connections);
-            
-        } catch (err) {
-            this.showError('Error retrieving contacts: ' + err.message);
-        } finally {
-            this.elements.loader.style.display = 'none';
-        }
-    },
     
     // Render contacts to DOM
     renderContacts: function(contacts) {
+        this.elements.contactsContainer.innerHTML = '';
+        
+        if (!contacts || contacts.length === 0) {
+            this.elements.contactsContainer.innerHTML = '<p>No contacts found.</p>';
+            return;
+        }
+        
         const fragment = document.createDocumentFragment();
         
         contacts.forEach((person) => {

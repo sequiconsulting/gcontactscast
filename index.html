@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com; frame-src https://content-people.googleapis.com https://accounts.google.com https://apis.google.com">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com https://www.googleapis.com; frame-src https://content-people.googleapis.com https://accounts.google.com https://apis.google.com">
     <title>Google Contacts Viewer</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
-    <!-- Rest of your HTML remains the same -->
     <div class="container">
         <header>
             <h1>Google Contacts Viewer</h1>
-            <p>Connect with Google to view your contacts</p>
+            <p>Connect with Google to view your contacts (locally stored & encrypted)</p>
         </header>
 
         <div class="card">
@@ -24,12 +23,24 @@
             </div>
             <div id="user-info" style="display: none;">
                 <p>Signed in as: <span id="user-name"></span></p>
-                <button id="signout-button">Sign Out</button>
+                <div class="action-buttons">
+                    <button id="sync-button">Sync Contacts</button>
+                    <button id="signout-button">Sign Out</button>
+                </div>
             </div>
         </div>
 
         <div class="card" id="contacts-card" style="display: none;">
             <h2>Your Contacts</h2>
+            
+            <div class="sync-info">
+                <p>
+                    <span id="contact-count">0</span> contacts | 
+                    Last sync: <span id="last-sync-time">Never</span>
+                </p>
+                <p id="sync-status">Ready</p>
+            </div>
+            
             <div class="search-box">
                 <input type="text" id="search-input" placeholder="Search contacts...">
             </div>
@@ -38,7 +49,7 @@
         </div>
         
         <footer>
-            <p>This app accesses your Google contacts but does not store any data.</p>
+            <p>This app securely stores your contacts in your browser with encryption. No data is sent to our servers.</p>
         </footer>
     </div>
 
@@ -46,6 +57,8 @@
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
     <script src="js/config.js"></script>
+    <script src="js/storage-service.js"></script>
+    <script src="js/contacts-service.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

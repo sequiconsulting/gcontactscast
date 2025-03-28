@@ -38,6 +38,11 @@ button {
     cursor: pointer;
     font-size: 16px;
     transition: background-color 0.3s;
+    margin-right: 10px;
+}
+
+button:last-child {
+    margin-right: 0;
 }
 
 button:hover {
@@ -47,6 +52,11 @@ button:hover {
 button:disabled {
     background-color: #cccccc;
     cursor: not-allowed;
+}
+
+.action-buttons {
+    display: flex;
+    margin-top: 15px;
 }
 
 #contacts-container {
@@ -126,4 +136,58 @@ footer {
     border-radius: 4px;
     margin: 10px 0;
     font-size: 14px;
+}
+
+.sync-info {
+    background-color: #e8f5e9;
+    padding: 10px 15px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+#sync-status {
+    font-weight: bold;
+    color: #388e3c;
+    margin: 5px 0 0 0;
+}
+
+#sync-button {
+    background-color: #0F9D58;
+}
+
+#sync-button:hover {
+    background-color: #0b8043;
+}
+
+#signout-button {
+    background-color: #DB4437;
+}
+
+#signout-button:hover {
+    background-color: #c53929;
+}
+
+/* Add a blurred loading overlay when syncing */
+.syncing-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(2px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    display: none;
+}
+
+.syncing-message {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    text-align: center;
 }

@@ -1,15 +1,27 @@
 # Google Contacts Viewer
 
-A secure web application that allows users to view their Google Contacts. This application is built to be deployed on Netlify and implements modern security best practices.
+A secure web application that allows users to view their Google Contacts with enhanced privacy and offline functionality. This application is built to be deployed on Netlify and implements modern security best practices.
 
 ## Features
 
 - Secure authentication with Google OAuth 2.0
+- **Encrypted local storage of contacts in the browser**
+- **No limit on the number of contacts displayed**
+- **Periodic contact synchronization to keep data up-to-date**
 - View your Google Contacts with names, emails, and phone numbers
 - Search functionality to quickly find contacts
 - Responsive design that works on desktop and mobile
 - Proper security headers and CSP implementation
 - Environment variable management for API keys
+
+## How It Works
+
+This application differs from regular Google Contacts viewers in several important ways:
+
+1. **Encrypted Local Storage**: All contacts are securely stored in your browser's local storage with AES-GCM encryption
+2. **No Data Sent to Servers**: After authentication with Google, all data remains on your device
+3. **Pagination Support**: Retrieves all your contacts by automatically handling API pagination
+4. **Smart Syncing**: Only re-fetches contacts periodically or when you choose to sync
 
 ## Setup Instructions
 
@@ -84,14 +96,18 @@ A secure web application that allows users to view their Google Contacts. This a
 - Permissions-Policy to limit browser features
 - HTML sanitization to prevent client-side injection
 - Environment variables for API credentials
+- **AES-GCM encryption for locally stored contacts**
+- **User-specific encryption keys derived from Google ID**
 
 ## Privacy
 
-This application:
-- Does not store any contact data on servers
+This application prioritizes privacy:
+- All contact data is stored **only** on your device
+- Contacts are encrypted using modern cryptography (AES-GCM)
 - Only requests the minimal required permissions
 - Processes all data client-side
 - Includes a clear privacy statement for users
+- No analytics or tracking
 
 ## License
 
