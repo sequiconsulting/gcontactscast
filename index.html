@@ -4,17 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com https://www.googleapis.com; frame-src https://content-people.googleapis.com https://accounts.google.com https://apis.google.com">
-    <title>Google Contacts Viewer</title>
+    <title>GContactsCast</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <!-- Add meta description for SEO -->
     <meta name="description" content="A secure Google Contacts Viewer that encrypts and stores your contacts locally">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Google Contacts Viewer</h1>
-            <p>Connect with Google to view your contacts (locally stored & encrypted)</p>
+            <h1>GContactsCast</h1>
+            <p>Your secure Google Contacts viewer with local encryption</p>
         </header>
 
         <!-- Loading indicator for initial scripts -->
@@ -27,7 +26,6 @@
             <div id="auth-status">
                 <p>Please sign in to view your contacts.</p>
                 <button id="signin-button" disabled>Sign in with Google</button>
-                <div id="debug-info" style="display: none;"></div>
             </div>
             <div id="user-info" style="display: none;">
                 <p>Signed in as: <span id="user-name"></span></p>
@@ -68,16 +66,15 @@
         </div>
         
         <footer>
-            <p>This app securely stores your contacts in your browser with encryption. No data is sent to our servers.</p>
-            <p>Version: <span id="app-version">1.0.0</span> | <a href="debug.html">Debug Page</a></p>
+            <p>GContactsCast securely stores your contacts in your browser with encryption. No data is sent to our servers.</p>
+            <p>Version: <span id="app-version">1.0.0</span> | <a href="debug.html">Debug Info</a></p>
         </footer>
     </div>
 
-    <!-- Script loading with error handling and explicit sequence -->
+    <!-- Script loading sequence -->
     <script>
         // Set up global error handler
         window.addEventListener('error', function(event) {
-            console.error('Global error:', event.message);
             // Hide loader if there's an error
             document.getElementById('initial-loader').style.display = 'none';
             
@@ -94,21 +91,9 @@
             }
         });
         
-        // Function to add a debug message to the page
-        function debugMessage(message) {
-            console.log(message);
-            var debugInfo = document.getElementById('debug-info');
-            if (debugInfo) {
-                debugInfo.style.display = 'block';
-                debugInfo.innerHTML += `<p>${message}</p>`;
-            }
-        }
-        
-        // Function to load scripts sequentially with better error handling
+        // Function to load scripts sequentially
         function loadScripts(scripts, index) {
             if (index >= scripts.length) {
-                // All scripts loaded, hide loader
-                debugMessage("All scripts loaded successfully");
                 return;
             }
             
@@ -116,13 +101,10 @@
             script.src = scripts[index];
             
             script.onload = function() {
-                debugMessage(`Loaded: ${scripts[index]}`);
                 loadScripts(scripts, index + 1);
             };
             
             script.onerror = function() {
-                console.error('Failed to load script:', scripts[index]);
-                
                 var errorContainer = document.getElementById('error-container');
                 if (errorContainer) {
                     errorContainer.innerHTML = `
@@ -137,19 +119,11 @@
                 loadScripts(scripts, index + 1);
             };
             
-            // Add specific timeout for Google scripts
-            if (scripts[index].includes('google') || scripts[index].includes('gapi')) {
-                script.timeout = 10000; // 10 seconds timeout for Google scripts
-            }
-            
-            debugMessage(`Loading: ${scripts[index]}`);
             document.body.appendChild(script);
         }
         
-        // Start loading external Google API scripts with proper callbacks
+        // Start loading external Google API scripts
         function loadGoogleAPIs() {
-            debugMessage("Starting Google API loading sequence");
-            
             // Load gapi.js first
             var gapiScript = document.createElement('script');
             gapiScript.src = "https://apis.google.com/js/api.js";
@@ -157,8 +131,6 @@
             gapiScript.defer = true;
             
             gapiScript.onload = function() {
-                debugMessage("Google API (gapi.js) loaded, loading GIS next");
-                
                 // Now load Google Identity Services
                 var gisScript = document.createElement('script');
                 gisScript.src = "https://accounts.google.com/gsi/client";
@@ -166,8 +138,6 @@
                 gisScript.defer = true;
                 
                 gisScript.onload = function() {
-                    debugMessage("Google Identity Services loaded, loading app scripts next");
-                    
                     // Now load our app scripts
                     var appScripts = [
                         "js/config.js",
@@ -180,7 +150,6 @@
                 };
                 
                 gisScript.onerror = function() {
-                    console.error('Failed to load Google Identity Services');
                     var errorContainer = document.getElementById('error-container');
                     if (errorContainer) {
                         errorContainer.innerHTML = `
@@ -197,7 +166,6 @@
             };
             
             gapiScript.onerror = function() {
-                console.error('Failed to load Google API');
                 var errorContainer = document.getElementById('error-container');
                 if (errorContainer) {
                     errorContainer.innerHTML = `
