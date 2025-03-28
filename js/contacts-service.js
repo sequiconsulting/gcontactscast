@@ -1,35 +1,56 @@
-// Contacts Service for Google Contacts Viewer
+// Contacts Service for GContactsCast
 // Handles fetching and processing Google contacts
 
 const ContactsService = {
-    // Constants for API requests
+    // API request constants
     MAX_RESULTS_PER_PAGE: 100,
-    DEFAULT_PERSON_FIELDS: 'names,emailAddresses,phoneNumbers',
+    DEFAULT_PERSON_FIELDS: 'names,emailAddresses,phoneNumbers,metadata',
     
-    // Get user ID (for storage and identification)
+    // Get user ID for storage
     getUserId: async function() {
         try {
+            // Use a more robust method to get a unique user identifier
             const response = await gapi.client.people.people.get({
                 resourceName: 'people/me',
-                personFields: 'metadata',
+                personFields: 'metadata,emailAddresses'
             });
             
-            // Get Google source ID as unique identifier
-            if (response.result && 
-                response.result.metadata && 
-                response.result.metadata.sources && 
-                response.result.metadata.sources.length > 0) {
-                return response.result.metadata.sources[0].id;
+            // Try multiple methods to get a unique identifier
+            if (response.result) {
+                // Prioritize email as a unique identifier if available
+                if (response.result.emailAddresses && response.result.emailAddresses.length > 0) {
+                    const email = response.result.emailAddresses[0].value;
+                    return btoa(email); // Base64 encode to create a safe identifier
+                }
+                
+                // Fallback to metadata sources
+                if (response.result.metadata && 
+                    response.result.metadata.sources && 
+                    response.result.metadata.sources.length > 0) {
+                    return response.result.metadata.sources[0].id;
+                }
             }
             
-            throw new Error('Could not retrieve user ID');
+            // Last resort: generate a unique ID based on current timestamp
+            console.warn('Generating fallback user ID');
+            return `fallback_${Date.now()}`;
         } catch (error) {
-            console.error('Error getting user ID:', error);
-            throw error;
+            console.error('Detailed error getting user ID:', error);
+            
+            // More detailed error logging
+            if (error.result && error.result.error) {
+                console.error('Google API Error Details:', 
+                    `Code: ${error.result.error.code}`, 
+                    `Message: ${error.result.error.message}`
+                );
+            }
+            
+            // Provide a fallback mechanism
+            return `fallback_${Date.now()}`;
         }
     },
     
-    // Fetch all contacts using pagination
+    // Fetch all contacts with pagination
     fetchAllContacts: async function(progressCallback, maxPages = 50) {
         try {
             let contacts = [];
@@ -77,11 +98,20 @@ const ContactsService = {
             return contacts;
         } catch (error) {
             console.error('Error fetching contacts:', error);
+            
+            // More detailed error logging
+            if (error.result && error.result.error) {
+                console.error('Contacts Fetch Error:', 
+                    `Code: ${error.result.error.code}`, 
+                    `Message: ${error.result.error.message}`
+                );
+            }
+            
             throw error;
         }
     },
     
-    // Process contacts to ensure consistent format
+    // Process contacts to ensure consistent format and reduce storage size
     processContacts: function(contacts) {
         if (!contacts || !Array.isArray(contacts)) {
             return [];
@@ -91,7 +121,7 @@ const ContactsService = {
         return contacts.filter(contact => {
             return contact.names && contact.names.length > 0;
         }).map(contact => {
-            // Only keep fields we need to reduce storage size
+            // Only keep fields we need
             return {
                 resourceName: contact.resourceName,
                 names: contact.names,

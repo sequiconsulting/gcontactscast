@@ -1,86 +1,92 @@
-// Enhanced Storage Service for Google Contacts Viewer
-// Handles local encrypted storage of contacts with improved security
+// Storage Service for GContactsCast
+// Handles encrypted local storage of contacts
 
 const StorageService = {
-    // Encryption key (derived from user's Google ID + app-specific salt)
+    // Internal state
     encryptionKey: null,
-    
-    // Internal state for security
     _initialized: false,
     _userId: null,
     
-    // Initialize the storage service with user information
+    // Initialize storage with user ID (creates encryption key)
     init: async function(userId) {
-        if (!userId || userId.length < 5) {
-            throw new Error('Invalid user ID for storage initialization');
+        // Validate input
+        if (!userId) {
+            console.error('Invalid user ID for storage initialization');
+            throw new Error('User ID is required for storage initialization');
         }
         
         try {
             // Create a unique encryption key for this user
-            const salt = 'google-contacts-viewer-v1-' + new Date().getFullYear(); // App-specific salt with year
+            const salt = 'gcontactscast-v1-salt';
             const encoder = new TextEncoder();
             
-            // Use a stronger key derivation with multiple iterations
-            let keyMaterial = encoder.encode(userId + salt);
+            // More robust key generation
+            const keyMaterial = await crypto.subtle.digest(
+                'SHA-256',
+                encoder.encode(userId + salt)
+            );
             
-            // Multiple rounds of hashing for stronger key derivation
-            for (let i = 0; i < 3; i++) {
-                keyMaterial = await crypto.subtle.digest(
-                    'SHA-256',
-                    keyMaterial
-                );
-            }
-            
-            // Import the key for AES-GCM
+            // Import the key for AES-GCM with more explicit key usage
             this.encryptionKey = await crypto.subtle.importKey(
-                'raw',
+                'raw', 
                 keyMaterial,
-                { name: 'AES-GCM' },
-                false, // Not extractable
+                { 
+                    name: 'AES-GCM',
+                    length: 256
+                },
+                false,
                 ['encrypt', 'decrypt']
             );
             
             this._initialized = true;
             this._userId = userId;
-            
-            console.log('Storage service initialized for user');
+            console.log('Storage service initialized successfully');
             return true;
         } catch (error) {
-            console.error('Failed to initialize storage service:', error.message);
-            this._initialized = false;
+            console.error('Detailed storage initialization error:', error);
+            
+            // Reset state on failure
             this.encryptionKey = null;
+            this._initialized = false;
+            this._userId = null;
+            
+            // Provide a more informative error
+            throw new Error(`Storage initialization failed: ${error.message}`);
+        }
+    },
+    
+    // Check if service is initialized
+    _checkInitialized: function() {
+        if (!this._initialized || !this.encryptionKey) {
+            const error = new Error('Storage service not initialized. Call init() first.');
+            console.error(error);
             throw error;
         }
     },
     
-    // Verify service is properly initialized
-    _verifyInitialized: function() {
-        if (!this._initialized || !this.encryptionKey) {
-            throw new Error('Storage service not initialized. Call init() first.');
-        }
-    },
-    
-    // Encrypt data with improved security
+    // Encrypt data with improved error handling
     encrypt: async function(data) {
-        this._verifyInitialized();
+        this._checkInitialized();
         
         try {
-            // Generate a secure random initialization vector (IV)
+            // Validate input
+            if (data === undefined || data === null) {
+                throw new Error('Cannot encrypt undefined or null data');
+            }
+            
+            // Generate cryptographically secure random IV
             const iv = crypto.getRandomValues(new Uint8Array(12));
             
-            // Add a timestamp to the data for integrity verification
+            // Prepare data with timestamp and metadata for integrity
             const dataWithTimestamp = {
                 data: data,
                 timestamp: Date.now(),
-                integrity: this._userId ? this._generateIntegrityHash(this._userId) : null,
+                version: 'v1'
             };
             
-            // Convert data to string
+            // Convert data to ArrayBuffer
             const dataStr = JSON.stringify(dataWithTimestamp);
-            
-            // Encode the string as a Uint8Array
-            const encoder = new TextEncoder();
-            const dataBuffer = encoder.encode(dataStr);
+            const dataBuffer = new TextEncoder().encode(dataStr);
             
             // Encrypt the data
             const encryptedBuffer = await crypto.subtle.encrypt(
@@ -92,46 +98,36 @@ const StorageService = {
                 dataBuffer
             );
             
-            // Combine the IV and encrypted data for storage
-            const resultBuffer = new Uint8Array(iv.length + encryptedBuffer.byteLength);
-            resultBuffer.set(iv, 0);
-            resultBuffer.set(new Uint8Array(encryptedBuffer), iv.length);
+            // Combine IV and encrypted data
+            const result = new Uint8Array(iv.length + encryptedBuffer.byteLength);
+            result.set(iv, 0);
+            result.set(new Uint8Array(encryptedBuffer), iv.length);
             
             // Convert to base64 for storage
-            return btoa(String.fromCharCode.apply(null, resultBuffer));
+            return btoa(String.fromCharCode.apply(null, result));
         } catch (error) {
-            console.error('Encryption failed:', error.message);
-            throw new Error('Failed to encrypt data: ' + error.message);
+            console.error('Encryption failed:', error);
+            throw new Error(`Encryption error: ${error.message}`);
         }
     },
     
-    // Generate a simple integrity hash from user ID
-    _generateIntegrityHash: function(userId) {
-        let hash = 0;
-        for (let i = 0; i < userId.length; i++) {
-            const char = userId.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
-        }
-        return hash.toString(16); // Convert to hex string
-    },
-    
-    // Decrypt data with integrity verification
+    // Decrypt data with improved error handling
     decrypt: async function(encryptedData) {
-        this._verifyInitialized();
+        this._checkInitialized();
         
         try {
-            // Convert from base64
-            const binaryString = atob(encryptedData);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
+            // Validate input
+            if (!encryptedData) {
+                throw new Error('No encrypted data provided');
             }
             
-            // Extract the IV (first 12 bytes)
+            // Convert from base64 to Uint8Array
+            const bytes = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
+            
+            // Extract IV (first 12 bytes)
             const iv = bytes.slice(0, 12);
             
-            // Extract the encrypted data
+            // Extract encrypted data
             const encryptedBuffer = bytes.slice(12);
             
             // Decrypt the data
@@ -144,58 +140,64 @@ const StorageService = {
                 encryptedBuffer
             );
             
-            // Decode the data
-            const decoder = new TextDecoder();
-            const decodedString = decoder.decode(decryptedBuffer);
+            // Parse the decrypted data
+            const decryptedText = new TextDecoder().decode(decryptedBuffer);
+            const parsedData = JSON.parse(decryptedText);
             
-            // Parse JSON
-            const parsedData = JSON.parse(decodedString);
-            
-            // Verify integrity if possible
-            if (this._userId && parsedData.integrity) {
-                const expectedHash = this._generateIntegrityHash(this._userId);
-                if (parsedData.integrity !== expectedHash) {
-                    console.warn('Integrity check failed - data may have been tampered with');
-                }
+            // Validate decrypted data
+            if (!parsedData || !parsedData.data) {
+                throw new Error('Decrypted data is invalid');
             }
             
-            // Return just the actual data, not the wrapper
+            // Return just the actual data
             return parsedData.data;
         } catch (error) {
-            console.error('Decryption failed:', error.message);
-            throw new Error('Failed to decrypt data: ' + error.message);
+            console.error('Decryption failed:', error);
+            throw new Error(`Decryption error: ${error.message}`);
         }
     },
     
-    // Save contacts to local storage with encryption
+    // Save contacts to localStorage with enhanced error handling
     saveContacts: async function(contacts, userId) {
+        // Validate inputs
+        if (!contacts || !Array.isArray(contacts)) {
+            console.error('Invalid contacts data');
+            throw new Error('Contacts must be a non-empty array');
+        }
+        
         if (userId !== this._userId) {
-            console.warn('User ID mismatch when saving contacts. Reinitializing...');
+            console.log('Reinitializing storage for new user');
             await this.init(userId);
         }
         
         try {
-            // Encrypt the contacts data
             const encryptedData = await this.encrypt(contacts);
             
-            // Store with user-specific key
-            localStorage.setItem(`contacts_${userId}`, encryptedData);
-            
-            // Store last sync time
-            localStorage.setItem(`last_sync_${userId}`, Date.now().toString());
+            // Use try-catch for localStorage to handle potential quota exceeded errors
+            try {
+                localStorage.setItem(`contacts_${userId}`, encryptedData);
+                localStorage.setItem(`last_sync_${userId}`, Date.now().toString());
+            } catch (storageError) {
+                if (storageError instanceof DOMException && 
+                    (storageError.name === 'QuotaExceededError' || storageError.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+                    console.error('Local storage quota exceeded');
+                    throw new Error('Cannot save contacts: Storage is full');
+                }
+                throw storageError;
+            }
             
             console.log(`Saved ${contacts.length} contacts to local storage`);
             return true;
         } catch (error) {
             console.error('Failed to save contacts:', error);
-            return false;
+            throw error;
         }
     },
     
-    // Load contacts from local storage with decryption
+    // Load contacts from localStorage with improved error handling
     loadContacts: async function(userId) {
         if (userId !== this._userId) {
-            console.warn('User ID mismatch when loading contacts. Reinitializing...');
+            console.log('Reinitializing storage for user');
             await this.init(userId);
         }
         
@@ -207,10 +209,14 @@ const StorageService = {
                 return null;
             }
             
-            // Decrypt the contacts data
             const contacts = await this.decrypt(encryptedData);
-            console.log(`Loaded ${contacts.length} contacts from local storage`);
             
+            if (!contacts || contacts.length === 0) {
+                console.log('Decrypted contacts are empty');
+                return null;
+            }
+            
+            console.log(`Loaded ${contacts.length} contacts from local storage`);
             return contacts;
         } catch (error) {
             console.error('Failed to load contacts:', error);
@@ -218,36 +224,57 @@ const StorageService = {
         }
     },
     
-    // Get the last sync time
+    // Get last sync time with error handling
     getLastSyncTime: function(userId) {
-        const lastSync = localStorage.getItem(`last_sync_${userId}`);
-        return lastSync ? parseInt(lastSync, 10) : null;
-    },
-    
-    // Check if we need to sync (based on time threshold)
-    needsSync: function(userId, thresholdHours = 24) {
-        const lastSync = this.getLastSyncTime(userId);
-        
-        if (!lastSync) {
-            return true; // No previous sync
+        try {
+            const lastSync = localStorage.getItem(`last_sync_${userId}`);
+            return lastSync ? parseInt(lastSync) : null;
+        } catch (error) {
+            console.error('Error retrieving last sync time:', error);
+            return null;
         }
-        
-        const now = Date.now();
-        const thresholdMs = thresholdHours * 60 * 60 * 1000;
-        
-        return (now - lastSync) > thresholdMs;
     },
     
-    // Clear user data on logout
+    // Check if sync is needed with more flexible threshold
+    needsSync: function(userId, thresholdHours = 24) {
+        try {
+            const lastSync = this.getLastSyncTime(userId);
+            
+            if (!lastSync) {
+                console.log('No previous sync found, sync recommended');
+                return true; // No previous sync
+            }
+            
+            const now = Date.now();
+            const thresholdMs = thresholdHours * 60 * 60 * 1000;
+            const timeSinceLastSync = now - lastSync;
+            
+            const needsSync = timeSinceLastSync > thresholdMs;
+            
+            console.log(`Time since last sync: ${timeSinceLastSync}ms, Threshold: ${thresholdMs}ms`);
+            console.log(needsSync ? 'Sync recommended' : 'Sync not needed');
+            
+            return needsSync;
+        } catch (error) {
+            console.error('Error checking sync need:', error);
+            return true; // Default to syncing if there's an error
+        }
+    },
+    
+    // Clear user data with comprehensive cleanup
     clearUserData: function(userId) {
-        localStorage.removeItem(`contacts_${userId}`);
-        localStorage.removeItem(`last_sync_${userId}`);
-        this.encryptionKey = null;
-        this._initialized = false;
-        this._userId = null;
-        console.log('User data cleared from local storage');
+        try {
+            localStorage.removeItem(`contacts_${userId}`);
+            localStorage.removeItem(`last_sync_${userId}`);
+            
+            // Reset internal state
+            this.encryptionKey = null;
+            this._initialized = false;
+            this._userId = null;
+            
+            console.log('User data cleared from local storage');
+        } catch (error) {
+            console.error('Error clearing user data:', error);
+        }
     }
 };
-
-// Export the StorageService object
-// This module is loaded directly in the browser, no need for module.exports

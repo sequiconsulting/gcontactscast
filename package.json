@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "A secure Google Contacts Viewer application",
   "scripts": {
-    "build": "node prebuild.js",
+    "build": "node prebuild.js && node verify-build.js",
     "verify": "node verify-build.js",
     "dev": "http-server -p 8888"
   },

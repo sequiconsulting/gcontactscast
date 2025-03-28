@@ -28,12 +28,18 @@
                 <button id="signin-button" disabled>Sign in with Google</button>
             </div>
             <div id="user-info" style="display: none;">
-                <p>Signed in as: <span id="user-name"></span></p>
+                <p>Signed in successfully</p>
                 <div class="action-buttons">
                     <button id="sync-button">Sync Contacts</button>
                     <button id="signout-button">Sign Out</button>
                 </div>
             </div>
+        </div>
+
+        <!-- Configuration Status Section -->
+        <div class="card" id="config-check-card">
+            <h2>Configuration Status</h2>
+            <div id="config-status">Checking configuration...</div>
         </div>
 
         <div class="card" id="contacts-card" style="display: none;">
@@ -54,8 +60,16 @@
             <div id="contacts-container"></div>
         </div>
 
-        <!-- Error container for displaying application errors -->
-        <div id="error-container" class="error-container" style="display: none;"></div>
+        <!-- Improved error container with more detail -->
+        <div id="error-container" class="error-container" style="display: none;">
+            <h3>Application Error</h3>
+            <p id="error-message"></p>
+            <div class="error-actions">
+                <button onclick="location.reload()">Reload Page</button>
+                <button onclick="document.getElementById('error-container').style.display='none'">Dismiss</button>
+                <button onclick="window.location.href='diagnostic.html'">Run Diagnostics</button>
+            </div>
+        </div>
         
         <!-- Sync overlay -->
         <div id="syncing-overlay" class="syncing-overlay">
@@ -67,130 +81,53 @@
         
         <footer>
             <p>GContactsCast securely stores your contacts in your browser with encryption. No data is sent to our servers.</p>
-            <p>Version: <span id="app-version">1.0.0</span> | <a href="debug.html">Debug Info</a></p>
+            <p>Version: <span id="app-version">1.0.0</span> | <a href="diagnostic.html">Debug Info</a></p>
         </footer>
     </div>
 
-    <!-- Script loading sequence -->
+    <!-- Load Google API Scripts -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
+    
+    <!-- Load application scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/config-check.js"></script>
+    <script src="js/storage-service.js"></script>
+    <script src="js/contacts-service.js"></script>
+    <script src="js/app.js"></script>
+
     <script>
-        // Set up global error handler
+        // Enhanced error handling for popup/window issues
         window.addEventListener('error', function(event) {
-            // Hide loader if there's an error
-            document.getElementById('initial-loader').style.display = 'none';
+            console.error('Unhandled error:', event.error || event.message);
+            const errorContainer = document.getElementById('error-container');
+            const errorMessageEl = document.getElementById('error-message');
             
-            // Show error message
-            var errorContainer = document.getElementById('error-container');
-            if (errorContainer) {
-                errorContainer.innerHTML = `
-                    <h3>Error Loading Application</h3>
-                    <p>There was a problem loading the application resources.</p>
-                    <p>Error details: ${event.message}</p>
-                    <button onclick="location.reload()">Reload Page</button>
-                `;
+            if (errorContainer && errorMessageEl) {
+                errorMessageEl.textContent = 
+                    event.error ? 
+                    (event.error.message || 'An unexpected error occurred') : 
+                    event.message;
                 errorContainer.style.display = 'block';
             }
         });
-        
-        // Function to load scripts sequentially
-        function loadScripts(scripts, index) {
-            if (index >= scripts.length) {
-                return;
+
+        // Improved popup blocker detection
+        function detectPopupBlocker() {
+            const signinButton = document.getElementById('signin-button');
+            if (signinButton) {
+                signinButton.addEventListener('click', function() {
+                    setTimeout(() => {
+                        if (!window.googleAuthPopupOpen) {
+                            alert('It seems your browser is blocking the Google Sign-In popup. Please allow popups for this site.');
+                        }
+                    }, 1000);
+                });
             }
-            
-            var script = document.createElement('script');
-            script.src = scripts[index];
-            
-            script.onload = function() {
-                loadScripts(scripts, index + 1);
-            };
-            
-            script.onerror = function() {
-                var errorContainer = document.getElementById('error-container');
-                if (errorContainer) {
-                    errorContainer.innerHTML = `
-                        <h3>Failed to Load Application</h3>
-                        <p>Could not load required script: ${scripts[index]}</p>
-                        <button onclick="location.reload()">Reload Page</button>
-                    `;
-                    errorContainer.style.display = 'block';
-                }
-                
-                // Try to continue loading other scripts
-                loadScripts(scripts, index + 1);
-            };
-            
-            document.body.appendChild(script);
         }
-        
-        // Start loading external Google API scripts
-        function loadGoogleAPIs() {
-            // Load gapi.js first
-            var gapiScript = document.createElement('script');
-            gapiScript.src = "https://apis.google.com/js/api.js";
-            gapiScript.async = true;
-            gapiScript.defer = true;
-            
-            gapiScript.onload = function() {
-                // Now load Google Identity Services
-                var gisScript = document.createElement('script');
-                gisScript.src = "https://accounts.google.com/gsi/client";
-                gisScript.async = true;
-                gisScript.defer = true;
-                
-                gisScript.onload = function() {
-                    // Now load our app scripts
-                    var appScripts = [
-                        "js/config.js",
-                        "js/storage-service.js",
-                        "js/contacts-service.js",
-                        "js/app.js"
-                    ];
-                    
-                    loadScripts(appScripts, 0);
-                };
-                
-                gisScript.onerror = function() {
-                    var errorContainer = document.getElementById('error-container');
-                    if (errorContainer) {
-                        errorContainer.innerHTML = `
-                            <h3>Failed to Load Google Identity Services</h3>
-                            <p>The application could not load Google Identity Services.</p>
-                            <p>Please check your internet connection and try again.</p>
-                            <button onclick="location.reload()">Reload Page</button>
-                        `;
-                        errorContainer.style.display = 'block';
-                    }
-                };
-                
-                document.body.appendChild(gisScript);
-            };
-            
-            gapiScript.onerror = function() {
-                var errorContainer = document.getElementById('error-container');
-                if (errorContainer) {
-                    errorContainer.innerHTML = `
-                        <h3>Failed to Load Google API</h3>
-                        <p>The application could not load Google API (gapi).</p>
-                        <p>Please check your internet connection and try again.</p>
-                        <button onclick="location.reload()">Reload Page</button>
-                    `;
-                    errorContainer.style.display = 'block';
-                }
-            };
-            
-            document.body.appendChild(gapiScript);
-        }
-        
-        // Update app version if available
-        document.addEventListener('DOMContentLoaded', function() {
-            var versionElement = document.getElementById('app-version');
-            if (versionElement && window.CONFIG && window.CONFIG.VERSION) {
-                versionElement.textContent = window.CONFIG.VERSION.split('T')[0]; // Just show the date part
-            }
-            
-            // Start loading Google APIs
-            loadGoogleAPIs();
-        });
+
+        // Run popup blocker detection after DOM load
+        document.addEventListener('DOMContentLoaded', detectPopupBlocker);
     </script>
 </body>
 </html>
