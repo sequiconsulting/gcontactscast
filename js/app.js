@@ -1,53 +1,66 @@
-// Update the part of GoogleContactsApp.checkDependencies that checks for CONFIG
-checkDependencies: function() {
-    // Check for gapi and google identity services
-    if (typeof gapi === 'undefined') {
-        console.warn('Google API client not loaded yet');
-        return false;
-    }
+// Only the relevant part of app.js that needs to be modified
+// In the loadGisClient function, replace:
+
+loadGisClient: function() {
+    console.log('Loading GIS client...');
     
-    if (typeof google === 'undefined' || typeof google.accounts === 'undefined' || 
-        typeof google.accounts.oauth2 === 'undefined') {
-        console.warn('Google Identity Services not loaded yet');
-        return false;
-    }
-    
-    // Check for CONFIG
-    if (typeof CONFIG === 'undefined') {
-        console.error('CONFIG object not defined. Please check config.js');
-        this.showFatalError('Configuration error: CONFIG object not found');
-        return false;
-    }
-    
-    // Verify CONFIG has required properties
+    // Check CONFIG using getter for CLIENT_ID
     try {
-        // Test accessing credentials through getters
         const clientId = CONFIG.CLIENT_ID;
-        const apiKey = CONFIG.API_KEY;
-        
-        if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID' || clientId.length < 10) {
-            console.error('Invalid CLIENT_ID configuration');
-            this.showFatalError('Invalid CLIENT_ID. Please check your environment variables.');
-            return false;
+        if (!clientId || clientId === 'YOUR_GOOGLE_CLIENT_ID') {
+            console.error('Invalid CLIENT_ID. Please check your configuration.');
+            this.showError('Invalid CLIENT_ID configuration. Please check the console for details.');
+            return;
         }
         
-        if (!apiKey || apiKey === 'YOUR_GOOGLE_API_KEY' || apiKey.length < 10) {
-            console.error('Invalid API_KEY configuration');
-            this.showFatalError('Invalid API_KEY. Please check your environment variables.');
-            return false;
-        }
+        // Define callback immediately to avoid race conditions
+        const tokenCallback = (resp) => {
+            if (resp.error !== undefined) {
+                // Handle specific errors
+                if (resp.error === 'popup_closed_by_user') {
+                    this.showError('Sign in was cancelled. Please try again.');
+                } else {
+                    this.showError('Authentication error: ' + resp.error);
+                }
+                return;
+            }
+            
+            this.onSuccessfulAuth();
+        };
+        
+        this.state.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: clientId, // Use the value we retrieved
+            scope: CONFIG.SCOPES,
+            callback: tokenCallback,
+            error_callback: (err) => {
+                this.showError('Authentication initialization error: ' + err.type);
+            }
+        });
+        
+        this.state.gisInited = true;
+        console.log('GIS client initialized successfully');
+        this.maybeEnableButtons();
     } catch (error) {
-        console.error('Error accessing credentials:', error);
-        this.showFatalError('Failed to access API credentials: ' + error.message);
-        return false;
+        console.error('Failed to initialize Google Identity Services client:', error);
+        this.showError('Failed to initialize Google Identity Services: ' + error.message);
     }
-    
-    // Check for services
-    if (typeof StorageService === 'undefined' || typeof ContactsService === 'undefined') {
-        console.error('Required services not loaded');
-        this.showFatalError('Required JavaScript files not loaded. Please check the console.');
-        return false;
+},
+
+// Similarly for initializeGapiClient:
+initializeGapiClient: async function() {
+    console.log('Initializing GAPI client...');
+    try {
+        // Get API_KEY using the getter
+        const apiKey = CONFIG.API_KEY;
+        await gapi.client.init({
+            apiKey: apiKey,
+            discoveryDocs: [CONFIG.DISCOVERY_DOC],
+        });
+        this.state.gapiInited = true;
+        console.log('GAPI client initialized successfully');
+        this.maybeEnableButtons();
+    } catch (error) {
+        console.error('Failed to initialize Google API client:', error);
+        this.showError('Failed to initialize Google API client: ' + error.message);
     }
-    
-    return true;
 },

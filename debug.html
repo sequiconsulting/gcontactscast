@@ -1,44 +1,79 @@
-// Update the part of debug.html that checks configuration
-// Inside the script at the bottom of debug.html, replace the config checking code with:
-
-// Check environment variables (via config)
-const envVarsStatus = document.getElementById('env-vars-status');
-const configDisplay = document.getElementById('config-display');
-const apiLibsStatus = document.getElementById('api-libs-status');
-
-// Check if CONFIG exists
-if (typeof CONFIG !== 'undefined') {
-    // Try to access the credentials - will use getters if available
-    try {
-        const clientIdOk = CONFIG.CLIENT_ID && CONFIG.CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID';
-        const apiKeyOk = CONFIG.API_KEY && CONFIG.API_KEY !== 'YOUR_GOOGLE_API_KEY';
+// Script section for debug.html - replace the existing script that checks CONFIG
+document.addEventListener('DOMContentLoaded', function() {
+    // Check environment variables (via config)
+    const envVarsStatus = document.getElementById('env-vars-status');
+    const configDisplay = document.getElementById('config-display');
+    const apiLibsStatus = document.getElementById('api-libs-status');
+    
+    // Check if CONFIG exists
+    if (typeof CONFIG !== 'undefined') {
+        // Check if environment variables were properly injected
+        let clientIdOk = false;
+        let apiKeyOk = false;
         
-        let statusHtml = '';
-        statusHtml += `<p>CLIENT_ID: <span class="${clientIdOk ? 'status-ok' : 'status-error'}">${clientIdOk ? 'Configured' : 'Missing or default'}</span></p>`;
-        statusHtml += `<p>API_KEY: <span class="${apiKeyOk ? 'status-ok' : 'status-error'}">${apiKeyOk ? 'Configured' : 'Missing or default'}</span></p>`;
-        
-        envVarsStatus.innerHTML = statusHtml;
-        
-        // Display current config (masked for security)
-        let configHtml = '<div class="code-block">';
-        configHtml += `CLIENT_ID: ${clientIdOk ? '✓ Set (first character: ' + CONFIG.CLIENT_ID.charAt(0) + '... last character: ' + CONFIG.CLIENT_ID.charAt(CONFIG.CLIENT_ID.length-1) + ')' : '✗ Not set properly'}\n`;
-        configHtml += `API_KEY: ${apiKeyOk ? '✓ Set (first character: ' + CONFIG.API_KEY.charAt(0) + '... last character: ' + CONFIG.API_KEY.charAt(CONFIG.API_KEY.length-1) + ')' : '✗ Not set properly'}\n`;
-        configHtml += `SCOPES: ${CONFIG.SCOPES}\n`;
-        configHtml += `DISCOVERY_DOC: ${CONFIG.DISCOVERY_DOC}`;
-        
-        // Display build version if available
-        if (CONFIG.VERSION) {
-            configHtml += `\nVERSION: ${CONFIG.VERSION}`;
+        try {
+            // Use the getters to access the values
+            clientIdOk = CONFIG.CLIENT_ID && CONFIG.CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID';
+            apiKeyOk = CONFIG.API_KEY && CONFIG.API_KEY !== 'YOUR_GOOGLE_API_KEY';
+            
+            let statusHtml = '';
+            statusHtml += `<p>CLIENT_ID: <span class="${clientIdOk ? 'status-ok' : 'status-error'}">${clientIdOk ? 'Configured' : 'Missing or default'}</span></p>`;
+            statusHtml += `<p>API_KEY: <span class="${apiKeyOk ? 'status-ok' : 'status-error'}">${apiKeyOk ? 'Configured' : 'Missing or default'}</span></p>`;
+            
+            envVarsStatus.innerHTML = statusHtml;
+            
+            // Display current config (masked for security)
+            let configHtml = '<div class="code-block">';
+            
+            // Only show partial values for security
+            if (clientIdOk) {
+                const clientId = CONFIG.CLIENT_ID;
+                const firstChars = clientId.substring(0, 3);
+                const lastChars = clientId.substring(clientId.length - 3);
+                configHtml += `CLIENT_ID: ✓ Set (${firstChars}...${lastChars})\n`;
+            } else {
+                configHtml += `CLIENT_ID: ✗ Not set properly\n`;
+            }
+            
+            if (apiKeyOk) {
+                const apiKey = CONFIG.API_KEY;
+                const firstChars = apiKey.substring(0, 3);
+                const lastChars = apiKey.substring(apiKey.length - 3);
+                configHtml += `API_KEY: ✓ Set (${firstChars}...${lastChars})\n`;
+            } else {
+                configHtml += `API_KEY: ✗ Not set properly\n`;
+            }
+            
+            configHtml += `SCOPES: ${CONFIG.SCOPES}\n`;
+            configHtml += `DISCOVERY_DOC: ${CONFIG.DISCOVERY_DOC}`;
+            
+            // Add version if available
+            if (CONFIG.VERSION) {
+                configHtml += `\nVERSION: ${CONFIG.VERSION}`;
+            }
+            
+            configHtml += '</div>';
+            
+            configDisplay.innerHTML = configHtml;
+        } catch (error) {
+            console.error('Error accessing CONFIG properties:', error);
+            envVarsStatus.innerHTML = '<p class="status-error">Error accessing CONFIG properties. Check console for details.</p>';
+            configDisplay.innerHTML = '<p class="status-error">Cannot display configuration due to an error</p>';
         }
-        
-        configHtml += '</div>';
-        
-        configDisplay.innerHTML = configHtml;
-    } catch (error) {
-        envVarsStatus.innerHTML = `<p class="status-error">Error accessing CONFIG properties: ${error.message}</p>`;
-        configDisplay.innerHTML = '<p class="status-error">Cannot display configuration - error accessing properties</p>';
+    } else {
+        envVarsStatus.innerHTML = '<p class="status-error">CONFIG object not found. Check if config.js is loaded correctly.</p>';
+        configDisplay.innerHTML = '<p class="status-error">Cannot display configuration - CONFIG not available</p>';
     }
-} else {
-    envVarsStatus.innerHTML = '<p class="status-error">CONFIG object not found. Check if config.js is loaded correctly.</p>';
-    configDisplay.innerHTML = '<p class="status-error">Cannot display configuration - CONFIG not available</p>';
-}
+    
+    // Check if Google API libraries are loaded
+    let apiLibsHtml = '';
+    const gapiLoaded = typeof gapi !== 'undefined';
+    const gisLoaded = typeof google !== 'undefined' && 
+                    typeof google.accounts !== 'undefined' && 
+                    typeof google.accounts.oauth2 !== 'undefined';
+    
+    apiLibsHtml += `<p>Google API (gapi): <span class="${gapiLoaded ? 'status-ok' : 'status-error'}">${gapiLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
+    apiLibsHtml += `<p>Google Identity Services: <span class="${gisLoaded ? 'status-ok' : 'status-error'}">${gisLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
+    
+    apiLibsStatus.innerHTML = apiLibsHtml;
+});

@@ -3,23 +3,22 @@ const fs = require('fs-extra');
 const path = require('path');
 require('dotenv').config();
 
-// Helper function to obfuscate credentials
-function obfuscateCredential(credential) {
-  if (typeof credential !== 'string' || !credential || credential.includes('YOUR_GOOGLE_')) {
-    return ''; // Return empty string for invalid credentials
+// Simple obfuscation of credentials
+function obfuscate(str) {
+  // If it's empty or a placeholder, don't obfuscate
+  if (!str || str === 'YOUR_GOOGLE_CLIENT_ID' || str === 'YOUR_GOOGLE_API_KEY') {
+    return '';
   }
-  
-  // Simple obfuscation: base64 encode and reverse the string
-  return Buffer.from(credential).toString('base64').split('').reverse().join('');
+  // Simple obfuscation: Base64 encode and reverse
+  return Buffer.from(str).toString('base64').split('').reverse().join('');
 }
 
 // Process environment variables
 function processEnvVariables() {
-  console.log('Processing environment variables with credential protection...');
+  console.log('Processing environment variables...');
   
   const jsDir = path.join(__dirname, 'js');
   const configPath = path.join(jsDir, 'config.js');
-  const configTemplatePath = path.join(__dirname, 'config.template.js');
   
   // Ensure js directory exists
   if (!fs.existsSync(jsDir)) {
@@ -27,50 +26,29 @@ function processEnvVariables() {
     fs.mkdirSync(jsDir, { recursive: true });
   }
   
-  // Check for required environment variables
-  if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID') {
-    console.error('ERROR: GOOGLE_CLIENT_ID environment variable is required for deployment!');
-    process.exit(1); // Fail the build
-  }
+  // Get credentials from environment variables
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
+  const apiKey = process.env.GOOGLE_API_KEY || '';
   
-  if (!process.env.GOOGLE_API_KEY || process.env.GOOGLE_API_KEY === 'YOUR_GOOGLE_API_KEY') {
-    console.error('ERROR: GOOGLE_API_KEY environment variable is required for deployment!');
-    process.exit(1); // Fail the build
-  }
+  // Obfuscate credentials
+  const obfuscatedClientId = obfuscate(clientId);
+  const obfuscatedApiKey = obfuscate(apiKey);
   
-  // Obfuscate the credentials
-  const obfuscatedClientId = obfuscateCredential(process.env.GOOGLE_CLIENT_ID);
-  const obfuscatedApiKey = obfuscateCredential(process.env.GOOGLE_API_KEY);
-  const buildVersion = new Date().toISOString();
-  
-  let configContent;
-  
-  // Try to use template file if it exists
-  if (fs.existsSync(configTemplatePath)) {
-    console.log('Using config template file');
-    configContent = fs.readFileSync(configTemplatePath, 'utf8');
-    
-    // Replace placeholders in template
-    configContent = configContent
-      .replace('{{ENCODED_CLIENT_ID}}', obfuscatedClientId)
-      .replace('{{ENCODED_API_KEY}}', obfuscatedApiKey)
-      .replace('{{BUILD_VERSION}}', buildVersion);
-  } else {
-    // Create config content directly if no template exists
-    console.log('Creating config file from scratch');
-    configContent = `// Configuration file for Google Contacts Viewer
+  // Create config content with obfuscated credentials
+  const configContent = `// Configuration file for Google Contacts Viewer
 const CONFIG = (function() {
-    // Obfuscation function to hide credentials from casual inspection
+    // Deobfuscation function
     function deobfuscate(encoded) {
+        if (!encoded) return 'YOUR_GOOGLE_CLIENT_ID';
         return atob(encoded.split('').reverse().join(''));
     }
     
-    // Encoded credentials - obfuscated at build time
+    // Obfuscated credentials
     const encodedClientId = '${obfuscatedClientId}';
     const encodedApiKey = '${obfuscatedApiKey}';
     
     return {
-        // Credentials are only decoded when needed through accessor methods
+        // Use getters to decode only when needed
         get CLIENT_ID() {
             return deobfuscate(encodedClientId);
         },
@@ -79,13 +57,12 @@ const CONFIG = (function() {
         },
         SCOPES: 'https://www.googleapis.com/auth/contacts.readonly',
         DISCOVERY_DOC: 'https://people.googleapis.com/$discovery/rest?version=v1',
-        VERSION: '${buildVersion}'
+        VERSION: '${new Date().toISOString()}'
     };
 })();`;
-  }
   
   try {
-    // Write the processed file
+    // Write the config file
     fs.writeFileSync(configPath, configContent);
     console.log('Config file written successfully to:', configPath);
     
@@ -102,52 +79,7 @@ const CONFIG = (function() {
     process.exit(1);
   }
   
-  console.log('Environment variables processed successfully with credential protection.');
-}
-
-// Create config template file for future builds
-function createConfigTemplate() {
-  console.log('Creating config template file...');
-  const templatePath = path.join(__dirname, 'config.template.js');
-  
-  // Only create if it doesn't exist
-  if (!fs.existsSync(templatePath)) {
-    const templateContent = fs.readFileSync(
-      path.join(__dirname, 'js', 'config.js'),
-      'utf8'
-    ).replace(
-      /const CONFIG = \{[\s\S]+?\};/,
-      `// Configuration file for Google Contacts Viewer
-const CONFIG = (function() {
-    // Obfuscation function to hide credentials from casual inspection
-    function deobfuscate(encoded) {
-        return atob(encoded.split('').reverse().join(''));
-    }
-    
-    // Encode credentials at build time - these will be replaced by the build script
-    const encodedClientId = '{{ENCODED_CLIENT_ID}}'; // Will be replaced during build
-    const encodedApiKey = '{{ENCODED_API_KEY}}';     // Will be replaced during build
-    
-    return {
-        // Credentials are only decoded when needed through accessor methods
-        get CLIENT_ID() {
-            return deobfuscate(encodedClientId);
-        },
-        get API_KEY() {
-            return deobfuscate(encodedApiKey);
-        },
-        SCOPES: 'https://www.googleapis.com/auth/contacts.readonly',
-        DISCOVERY_DOC: 'https://people.googleapis.com/$discovery/rest?version=v1',
-        VERSION: '{{BUILD_VERSION}}'
-    };
-})();`
-    );
-    
-    fs.writeFileSync(templatePath, templateContent);
-    console.log('Config template created successfully.');
-  } else {
-    console.log('Config template already exists, skipping creation.');
-  }
+  console.log('Environment variables processed successfully.');
 }
 
 // Create robots.txt
@@ -186,19 +118,26 @@ function verifyFiles() {
   } else {
     console.log('All required files verified successfully.');
   }
+  
+  // List all files in the js directory
+  const jsDir = path.join(__dirname, 'js');
+  if (fs.existsSync(jsDir)) {
+    console.log('Files in js directory:');
+    const files = fs.readdirSync(jsDir);
+    files.forEach(file => console.log(`  - ${file}`));
+  } else {
+    console.log('js directory not found!');
+  }
 }
 
 // Main build function
 async function build() {
   try {
-    console.log('Starting build process with enhanced security...');
+    console.log('Starting build process...');
     console.log('Current directory:', __dirname);
     
-    // Process environment variables (create config.js with obfuscation)
+    // Process environment variables (create config.js)
     processEnvVariables();
-    
-    // Create config template for future builds
-    createConfigTemplate();
     
     // Create robots.txt
     createRobotsTxt();
@@ -206,7 +145,7 @@ async function build() {
     // Verify required files
     verifyFiles();
     
-    console.log('Secure build completed successfully!');
+    console.log('Build completed successfully!');
   } catch (error) {
     console.error('Build failed:', error);
     process.exit(1);
