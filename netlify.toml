@@ -15,7 +15,7 @@
 [[headers]]
   for = "/*"
     [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com; frame-src https://content-people.googleapis.com https://accounts.google.com https://apis.google.com"
     X-Frame-Options = "DENY"
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"

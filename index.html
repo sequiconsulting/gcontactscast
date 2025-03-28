@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-Content-Type-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com; frame-src https://content-people.googleapis.com https://accounts.google.com https://apis.google.com">
     <title>Google Contacts Viewer</title>
     <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
+    <!-- Rest of your HTML remains the same -->
     <div class="container">
         <header>
             <h1>Google Contacts Viewer</h1>
