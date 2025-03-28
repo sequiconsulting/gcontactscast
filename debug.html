@@ -1,79 +1,206 @@
-// Script section for debug.html - replace the existing script that checks CONFIG
-document.addEventListener('DOMContentLoaded', function() {
-    // Check environment variables (via config)
-    const envVarsStatus = document.getElementById('env-vars-status');
-    const configDisplay = document.getElementById('config-display');
-    const apiLibsStatus = document.getElementById('api-libs-status');
-    
-    // Check if CONFIG exists
-    if (typeof CONFIG !== 'undefined') {
-        // Check if environment variables were properly injected
-        let clientIdOk = false;
-        let apiKeyOk = false;
-        
-        try {
-            // Use the getters to access the values
-            clientIdOk = CONFIG.CLIENT_ID && CONFIG.CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID';
-            apiKeyOk = CONFIG.API_KEY && CONFIG.API_KEY !== 'YOUR_GOOGLE_API_KEY';
-            
-            let statusHtml = '';
-            statusHtml += `<p>CLIENT_ID: <span class="${clientIdOk ? 'status-ok' : 'status-error'}">${clientIdOk ? 'Configured' : 'Missing or default'}</span></p>`;
-            statusHtml += `<p>API_KEY: <span class="${apiKeyOk ? 'status-ok' : 'status-error'}">${apiKeyOk ? 'Configured' : 'Missing or default'}</span></p>`;
-            
-            envVarsStatus.innerHTML = statusHtml;
-            
-            // Display current config (masked for security)
-            let configHtml = '<div class="code-block">';
-            
-            // Only show partial values for security
-            if (clientIdOk) {
-                const clientId = CONFIG.CLIENT_ID;
-                const firstChars = clientId.substring(0, 3);
-                const lastChars = clientId.substring(clientId.length - 3);
-                configHtml += `CLIENT_ID: ✓ Set (${firstChars}...${lastChars})\n`;
-            } else {
-                configHtml += `CLIENT_ID: ✗ Not set properly\n`;
-            }
-            
-            if (apiKeyOk) {
-                const apiKey = CONFIG.API_KEY;
-                const firstChars = apiKey.substring(0, 3);
-                const lastChars = apiKey.substring(apiKey.length - 3);
-                configHtml += `API_KEY: ✓ Set (${firstChars}...${lastChars})\n`;
-            } else {
-                configHtml += `API_KEY: ✗ Not set properly\n`;
-            }
-            
-            configHtml += `SCOPES: ${CONFIG.SCOPES}\n`;
-            configHtml += `DISCOVERY_DOC: ${CONFIG.DISCOVERY_DOC}`;
-            
-            // Add version if available
-            if (CONFIG.VERSION) {
-                configHtml += `\nVERSION: ${CONFIG.VERSION}`;
-            }
-            
-            configHtml += '</div>';
-            
-            configDisplay.innerHTML = configHtml;
-        } catch (error) {
-            console.error('Error accessing CONFIG properties:', error);
-            envVarsStatus.innerHTML = '<p class="status-error">Error accessing CONFIG properties. Check console for details.</p>';
-            configDisplay.innerHTML = '<p class="status-error">Cannot display configuration due to an error</p>';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://apis.google.com https://accounts.google.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://people.googleapis.com https://www.googleapis.com; frame-src https://content-people.googleapis.com https://accounts.google.com https://apis.google.com">
+    <title>Google Contacts Viewer - Debug</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .debug-card {
+            margin-bottom: 20px;
         }
-    } else {
-        envVarsStatus.innerHTML = '<p class="status-error">CONFIG object not found. Check if config.js is loaded correctly.</p>';
-        configDisplay.innerHTML = '<p class="status-error">Cannot display configuration - CONFIG not available</p>';
-    }
+        .status-ok {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .status-error {
+            color: #F44336;
+            font-weight: bold;
+        }
+        .code-block {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+        .debug-section {
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Google Contacts Viewer - Debug</h1>
+            <p>Configuration and Status Information</p>
+        </header>
+
+        <div class="card debug-card">
+            <h2>Environment Variables</h2>
+            <div id="env-vars-status">Loading...</div>
+            
+            <h3>Configuration</h3>
+            <div id="config-display">Loading...</div>
+        </div>
+
+        <div class="card debug-card">
+            <h2>API Libraries</h2>
+            <div id="api-libs-status">Loading...</div>
+        </div>
+
+        <div class="card debug-card">
+            <h2>Browser Information</h2>
+            <div id="browser-info">Loading...</div>
+        </div>
+
+        <div class="card debug-card">
+            <h2>Local Storage</h2>
+            <div id="storage-info">Loading...</div>
+        </div>
+
+        <div class="card">
+            <a href="index.html" class="button">Return to Main Page</a>
+        </div>
+    </div>
+
+    <!-- Load Google API Scripts -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
     
-    // Check if Google API libraries are loaded
-    let apiLibsHtml = '';
-    const gapiLoaded = typeof gapi !== 'undefined';
-    const gisLoaded = typeof google !== 'undefined' && 
-                    typeof google.accounts !== 'undefined' && 
-                    typeof google.accounts.oauth2 !== 'undefined';
+    <!-- Load app scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/storage-service.js"></script>
+    <script src="js/contacts-service.js"></script>
     
-    apiLibsHtml += `<p>Google API (gapi): <span class="${gapiLoaded ? 'status-ok' : 'status-error'}">${gapiLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
-    apiLibsHtml += `<p>Google Identity Services: <span class="${gisLoaded ? 'status-ok' : 'status-error'}">${gisLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
-    
-    apiLibsStatus.innerHTML = apiLibsHtml;
-});
+    <!-- Debug page specific script -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check environment variables (via config)
+        const envVarsStatus = document.getElementById('env-vars-status');
+        const configDisplay = document.getElementById('config-display');
+        const apiLibsStatus = document.getElementById('api-libs-status');
+        const browserInfo = document.getElementById('browser-info');
+        const storageInfo = document.getElementById('storage-info');
+        
+        // Check if CONFIG exists
+        if (typeof CONFIG !== 'undefined') {
+            // Check if environment variables were properly injected
+            let clientIdOk = false;
+            let apiKeyOk = false;
+            
+            try {
+                // Use the getters to access the values
+                clientIdOk = CONFIG.CLIENT_ID && CONFIG.CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID';
+                apiKeyOk = CONFIG.API_KEY && CONFIG.API_KEY !== 'YOUR_GOOGLE_API_KEY';
+                
+                let statusHtml = '';
+                statusHtml += `<p>CLIENT_ID: <span class="${clientIdOk ? 'status-ok' : 'status-error'}">${clientIdOk ? 'Configured' : 'Missing or default'}</span></p>`;
+                statusHtml += `<p>API_KEY: <span class="${apiKeyOk ? 'status-ok' : 'status-error'}">${apiKeyOk ? 'Configured' : 'Missing or default'}</span></p>`;
+                
+                envVarsStatus.innerHTML = statusHtml;
+                
+                // Display current config (masked for security)
+                let configHtml = '<div class="code-block">';
+                
+                // Only show partial values for security
+                if (clientIdOk) {
+                    const clientId = CONFIG.CLIENT_ID;
+                    const firstChars = clientId.substring(0, 3);
+                    const lastChars = clientId.substring(clientId.length - 3);
+                    configHtml += `CLIENT_ID: ✓ Set (${firstChars}...${lastChars})\n`;
+                } else {
+                    configHtml += `CLIENT_ID: ✗ Not set properly\n`;
+                }
+                
+                if (apiKeyOk) {
+                    const apiKey = CONFIG.API_KEY;
+                    const firstChars = apiKey.substring(0, 3);
+                    const lastChars = apiKey.substring(apiKey.length - 3);
+                    configHtml += `API_KEY: ✓ Set (${firstChars}...${lastChars})\n`;
+                } else {
+                    configHtml += `API_KEY: ✗ Not set properly\n`;
+                }
+                
+                configHtml += `SCOPES: ${CONFIG.SCOPES}\n`;
+                configHtml += `DISCOVERY_DOC: ${CONFIG.DISCOVERY_DOC}`;
+                
+                // Add version if available
+                if (CONFIG.VERSION) {
+                    configHtml += `\nVERSION: ${CONFIG.VERSION}`;
+                }
+                
+                configHtml += '</div>';
+                
+                configDisplay.innerHTML = configHtml;
+            } catch (error) {
+                console.error('Error accessing CONFIG properties:', error);
+                envVarsStatus.innerHTML = '<p class="status-error">Error accessing CONFIG properties. Check console for details.</p>';
+                configDisplay.innerHTML = '<p class="status-error">Cannot display configuration due to an error</p>';
+            }
+        } else {
+            envVarsStatus.innerHTML = '<p class="status-error">CONFIG object not found. Check if config.js is loaded correctly.</p>';
+            configDisplay.innerHTML = '<p class="status-error">Cannot display configuration - CONFIG not available</p>';
+        }
+        
+        // Check if Google API libraries are loaded
+        let apiLibsHtml = '';
+        const gapiLoaded = typeof gapi !== 'undefined';
+        const gisLoaded = typeof google !== 'undefined' && 
+                        typeof google.accounts !== 'undefined' && 
+                        typeof google.accounts.oauth2 !== 'undefined';
+        
+        apiLibsHtml += `<p>Google API (gapi): <span class="${gapiLoaded ? 'status-ok' : 'status-error'}">${gapiLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
+        apiLibsHtml += `<p>Google Identity Services: <span class="${gisLoaded ? 'status-ok' : 'status-error'}">${gisLoaded ? 'Loaded' : 'Not Loaded'}</span></p>`;
+        
+        apiLibsStatus.innerHTML = apiLibsHtml;
+        
+        // Display browser information
+        const browserInfoHtml = `
+            <p>User Agent: ${navigator.userAgent}</p>
+            <p>Web Crypto API: <span class="${window.crypto ? 'status-ok' : 'status-error'}">${window.crypto ? 'Available' : 'Not Available'}</span></p>
+            <p>localStorage: <span class="${window.localStorage ? 'status-ok' : 'status-error'}">${window.localStorage ? 'Available' : 'Not Available'}</span></p>
+        `;
+        browserInfo.innerHTML = browserInfoHtml;
+        
+        // Check local storage
+        try {
+            // Count items in local storage related to the app
+            let contactsCount = 0;
+            let syncCount = 0;
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('contacts_')) {
+                    contactsCount++;
+                } else if (key.startsWith('last_sync_')) {
+                    syncCount++;
+                }
+            }
+            
+            let storageHtml = `
+                <p>Contact datasets found: ${contactsCount}</p>
+                <p>Sync records found: ${syncCount}</p>
+                <p>Total localStorage usage: ${calculateStorageUsage()} KB</p>
+            `;
+            
+            storageInfo.innerHTML = storageHtml;
+        } catch (error) {
+            storageInfo.innerHTML = `<p class="status-error">Error accessing localStorage: ${error.message}</p>`;
+        }
+        
+        // Calculate localStorage usage in KB
+        function calculateStorageUsage() {
+            let total = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                total += localStorage.getItem(key).length;
+            }
+            return (total / 1024).toFixed(2);
+        }
+    });
+    </script>
+</body>
+</html>
